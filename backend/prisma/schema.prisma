@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  ADMIN
+  AUTHORITY
+  NGO_COORDINATOR
+  VOLUNTEER
+  AFFECTED_INDIVIDUAL
+}
+
+enum DisasterType {
+  FLOOD
+  EARTHQUAKE
+  FIRE
+  PANDEMIC
+  CYCLONE
+  LANDSLIDE
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DisasterStatus {
+  ACTIVE
+  MONITORING
+  CONTAINED
+  RESOLVED
+}
+
+enum RequestStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ResourceStatus {
+  AVAILABLE
+  RESERVED
+  ALLOCATED
+  EXPIRED
+}
+
+enum TaskStatus {
+  OPEN
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  name      RoleName @unique
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id              String             @id @default(cuid())
+  name            String
+  email           String             @unique
+  passwordHash    String
+  phone           String?
+  roleId          String
+  role            Role               @relation(fields: [roleId], references: [id])
+  isActive        Boolean            @default(true)
+  latitude        Float?
+  longitude       Float?
+  emergencyRequests EmergencyRequest[]
+  volunteer       Volunteer?
+  ngo             NGO?
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([roleId])
+  @@index([email])
+}
+
+model Disaster {
+  id          String             @id @default(cuid())
+  title       String
+  type        DisasterType
+  description String
+  location    String
+  latitude    Float
+  longitude   Float
+  severity    Severity
+  startDate   DateTime
+  status      DisasterStatus     @default(ACTIVE)
+  requests    EmergencyRequest[]
+  tasks       Task[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([status, severity])
+  @@index([latitude, longitude])
+}
+
+model EmergencyRequest {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  disasterId  String?
+  disaster    Disaster?     @relation(fields: [disasterId], references: [id])
+  requestType String
+  description String
+  latitude    Float
+  longitude   Float
+  priority    Priority      @default(MEDIUM)
+  status      RequestStatus @default(PENDING)
+  tasks       Task[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, priority])
+  @@index([userId])
+  @@index([disasterId])
+}
+
+model Resource {
+  id          String         @id @default(cuid())
+  name        String
+  category    String
+  quantity    Int
+  location    String
+  latitude    Float?
+  longitude   Float?
+  provider    String
+  expiryDate  DateTime?
+  status      ResourceStatus @default(AVAILABLE)
+  ngoId       String?
+  ngo         NGO?           @relation(fields: [ngoId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([category, status])
+  @@index([ngoId])
+}
+
+model Shelter {
+  id            String   @id @default(cuid())
+  name          String
+  address       String
+  latitude      Float
+  longitude     Float
+  capacity      Int
+  occupiedBeds  Int      @default(0)
+  contactPerson String
+  phone         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([latitude, longitude])
+}
+
+model Volunteer {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  skills       String[]
+  phone        String
+  location     String
+  latitude     Float?
+  longitude    Float?
+  availability Boolean  @default(true)
+  tasks        Task[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Task {
+  id                 String            @id @default(cuid())
+  title              String
+  description        String
+  status             TaskStatus        @default(OPEN)
+  disasterId         String?
+  disaster           Disaster?         @relation(fields: [disasterId], references: [id])
+  emergencyRequestId String?
+  emergencyRequest   EmergencyRequest? @relation(fields: [emergencyRequestId], references: [id])
+  volunteerId        String?
+  volunteer          Volunteer?        @relation(fields: [volunteerId], references: [id])
+  dueAt              DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([status])
+  @@index([volunteerId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  channel   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model NGO {
+  id          String     @id @default(cuid())
+  name        String
+  registrationNo String  @unique
+  userId      String     @unique
+  user        User       @relation(fields: [userId], references: [id])
+  resources   Resource[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entity, entityId])
+}
+
