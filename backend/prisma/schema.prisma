@@ -110,6 +110,7 @@ model Disaster {
   severity    Severity
   startDate   DateTime
   status      DisasterStatus     @default(ACTIVE)
+  imageUrl    String?
   requests    EmergencyRequest[]
   tasks       Task[]
   createdAt   DateTime           @default(now())
@@ -131,6 +132,7 @@ model EmergencyRequest {
   longitude   Float
   priority    Priority      @default(MEDIUM)
   status      RequestStatus @default(PENDING)
+  imageUrl    String?
   tasks       Task[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt

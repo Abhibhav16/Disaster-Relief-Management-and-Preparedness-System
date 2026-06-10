@@ -27,6 +27,8 @@ services:
       EMAIL_FROM: alerts@drrcs.local
     ports:
       - "4000:4000"
+    volumes:
+      - backend-uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,4 +48,5 @@ services:
 
 volumes:
   postgres-data:
+  backend-uploads:
 

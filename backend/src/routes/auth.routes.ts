@@ -15,7 +15,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   phone: z.string().optional(),
-  role: z.nativeEnum(RoleName).default("AFFECTED_INDIVIDUAL"),
+  role: z.enum(["AFFECTED_INDIVIDUAL", "VOLUNTEER", "NGO_COORDINATOR"]).default("AFFECTED_INDIVIDUAL"),
   latitude: z.number().optional(),
   longitude: z.number().optional()
 });

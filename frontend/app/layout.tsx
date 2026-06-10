@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DRRCS",
-  description: "Disaster Relief & Resource Coordination System"
+  title: "DRRCS - Disaster Response & Relief Coordination System",
+  description: "Disaster Response & Relief Coordination System",
+  icons: {
+    icon: "/favicon.svg",
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

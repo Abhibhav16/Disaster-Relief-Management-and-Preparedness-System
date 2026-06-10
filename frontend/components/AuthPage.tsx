@@ -19,9 +19,9 @@ type AuthResponse = {
 export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(initialMode === "login" ? "admin@drrcs.local" : "");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState(initialMode === "login" ? "Password123!" : "");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState("AFFECTED_INDIVIDUAL");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -56,13 +56,8 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode }) 
   function switchMode(nextMode: AuthMode) {
     setMode(nextMode);
     setError("");
-    if (nextMode === "login") {
-      setEmail("admin@drrcs.local");
-      setPassword("Password123!");
-    } else {
-      setEmail("");
-      setPassword("");
-    }
+    setEmail("");
+    setPassword("");
   }
 
   return (
@@ -111,7 +106,6 @@ export function AuthPage({ initialMode = "login" }: { initialMode?: AuthMode }) 
                 <option value="AFFECTED_INDIVIDUAL">Affected Individual</option>
                 <option value="VOLUNTEER">Volunteer</option>
                 <option value="NGO_COORDINATOR">NGO Coordinator</option>
-                <option value="AUTHORITY">Authority</option>
               </Select>
             )}
             {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
