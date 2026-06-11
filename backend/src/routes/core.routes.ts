@@ -32,6 +32,24 @@ function saveBase64Image(base64Str: string): string | null {
     return null;
   }
 }
+
+async function logAudit(actorId: string, action: string, entity: string, entityId: string | null, metadata: any, ipAddress: string | undefined) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId,
+        action,
+        entity,
+        entityId,
+        metadata: metadata || {},
+        ipAddress: ipAddress || null
+      }
+    });
+  } catch (err) {
+    console.error("Failed to write audit log:", err);
+  }
+}
+
 coreRouter.use(authenticate);
 
 const disasterSchema = z.object({
@@ -67,13 +85,27 @@ coreRouter.post("/disasters", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR")
     }
   }
   const item = await prisma.disaster.create({ data: { ...req.body, imageUrl } });
+  await logAudit(req.user!.id, "CREATE_DISASTER", "Disaster", item.id, req.body, req.ip);
   res.status(201).json(item);
 });
 
 coreRouter.get("/disasters/:id", async (req, res) => res.json(await prisma.disaster.findUniqueOrThrow({ where: { id: paramId(req.params.id) }, include: { requests: true, tasks: true } })));
-coreRouter.put("/disasters/:id", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"), validate(disasterSchema), async (req, res) => res.json(await prisma.disaster.update({ where: { id: paramId(req.params.id) }, data: req.body })));
-coreRouter.patch("/disasters/:id/status", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"), validate(z.object({ status: z.enum(["ACTIVE", "MONITORING", "CONTAINED", "RESOLVED"]) })), async (req, res) => res.json(await prisma.disaster.update({ where: { id: paramId(req.params.id) }, data: { status: req.body.status } })));
-coreRouter.delete("/disasters/:id", authorize("ADMIN"), async (req, res) => res.json(await prisma.disaster.delete({ where: { id: paramId(req.params.id) } })));
+coreRouter.put("/disasters/:id", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"), validate(disasterSchema), async (req, res) => {
+  const item = await prisma.disaster.update({ where: { id: paramId(req.params.id) }, data: req.body });
+  await logAudit(req.user!.id, "UPDATE_DISASTER", "Disaster", item.id, req.body, req.ip);
+  res.json(item);
+});
+coreRouter.patch("/disasters/:id/status", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"), validate(z.object({ status: z.enum(["ACTIVE", "MONITORING", "CONTAINED", "RESOLVED"]) })), async (req, res) => {
+  const item = await prisma.disaster.update({ where: { id: paramId(req.params.id) }, data: { status: req.body.status } });
+  await logAudit(req.user!.id, "UPDATE_DISASTER_STATUS", "Disaster", item.id, { status: req.body.status }, req.ip);
+  res.json(item);
+});
+coreRouter.delete("/disasters/:id", authorize("ADMIN"), async (req, res) => {
+  const id = paramId(req.params.id);
+  const item = await prisma.disaster.delete({ where: { id } });
+  await logAudit(req.user!.id, "DELETE_DISASTER", "Disaster", id, item, req.ip);
+  res.json(item);
+});
 
 const requestSchema = z.object({
   disasterId: z.string().optional(),
@@ -111,23 +143,97 @@ coreRouter.post("/requests", validate(requestSchema), async (req, res) => {
     data: { ...req.body, imageUrl, userId: req.user!.id },
     include: { user: { select: { id: true, name: true, email: true } } }
   });
+  await logAudit(req.user!.id, "CREATE_REQUEST", "EmergencyRequest", item.id, req.body, req.ip);
   res.status(201).json(item);
 });
 coreRouter.get("/requests/:id", async (req, res) => res.json(await prisma.emergencyRequest.findUniqueOrThrow({ where: { id: paramId(req.params.id) }, include: { user: true, disaster: true, tasks: true } })));
-coreRouter.put("/requests/:id", authorize("ADMIN", "AUTHORITY"), validate(requestSchema), async (req, res) => res.json(await prisma.emergencyRequest.update({ where: { id: paramId(req.params.id) }, data: req.body })));
+coreRouter.put("/requests/:id", authorize("ADMIN", "AUTHORITY"), validate(requestSchema), async (req, res) => {
+  const item = await prisma.emergencyRequest.update({ where: { id: paramId(req.params.id) }, data: req.body });
+  await logAudit(req.user!.id, "UPDATE_REQUEST", "EmergencyRequest", item.id, req.body, req.ip);
+  res.json(item);
+});
 coreRouter.patch(
   "/requests/:id/status",
   authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR", "VOLUNTEER"),
   validate(z.object({ status: z.enum(["PENDING", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CANCELLED"]) })),
   async (req, res) => {
-    res.json(await prisma.emergencyRequest.update({
+    const item = await prisma.emergencyRequest.update({
       where: { id: paramId(req.params.id) },
       data: { status: req.body.status },
       include: { user: { select: { id: true, name: true, email: true } } }
-    }));
+    });
+    await logAudit(req.user!.id, "UPDATE_REQUEST_STATUS", "EmergencyRequest", item.id, { status: req.body.status }, req.ip);
+    res.json(item);
   }
 );
-coreRouter.delete("/requests/:id", authorize("ADMIN"), async (req, res) => res.json(await prisma.emergencyRequest.delete({ where: { id: paramId(req.params.id) } })));
+coreRouter.delete("/requests/:id", authorize("ADMIN"), async (req, res) => {
+  const id = paramId(req.params.id);
+  const item = await prisma.emergencyRequest.delete({ where: { id } });
+  await logAudit(req.user!.id, "DELETE_REQUEST", "EmergencyRequest", id, item, req.ip);
+  res.json(item);
+});
+
+coreRouter.post(
+  "/requests/:id/allocate",
+  authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"),
+  validate(z.object({
+    resourceId: z.string(),
+    allocatedQuantity: z.number().int().positive()
+  })),
+  async (req, res) => {
+    const requestId = paramId(req.params.id);
+    const { resourceId, allocatedQuantity } = req.body;
+
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const resource = await tx.resource.findUniqueOrThrow({
+          where: { id: resourceId }
+        });
+
+        if (resource.quantity < allocatedQuantity) {
+          throw new Error(`Insufficient stock for resource "${resource.name}". Available: ${resource.quantity}, Requested: ${allocatedQuantity}`);
+        }
+
+        const updatedResource = await tx.resource.update({
+          where: { id: resourceId },
+          data: {
+            quantity: resource.quantity - allocatedQuantity,
+            status: resource.quantity - allocatedQuantity === 0 ? "ALLOCATED" : "AVAILABLE"
+          }
+        });
+
+        const updatedRequest = await tx.emergencyRequest.update({
+          where: { id: requestId },
+          data: {
+            status: "ASSIGNED"
+          }
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorId: req.user!.id,
+            action: "ALLOCATE_RESOURCE",
+            entity: "EmergencyRequest",
+            entityId: requestId,
+            metadata: {
+              resourceId,
+              resourceName: resource.name,
+              allocatedQuantity,
+              remainingQuantity: updatedResource.quantity
+            },
+            ipAddress: req.ip
+          }
+        });
+
+        return { updatedResource, updatedRequest };
+      });
+
+      res.json({ message: "Resources allocated successfully", data: result });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message || "Resource allocation failed" });
+    }
+  }
+);
 
 const resourceSchema = z.object({
   name: z.string().min(2),
@@ -195,6 +301,7 @@ coreRouter.get("/volunteers", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR",
 });
 coreRouter.post("/volunteers", validate(volunteerSchema), async (req, res) => {
   const item = await prisma.volunteer.create({ data: { ...req.body, userId: req.user!.id } });
+  await logAudit(req.user!.id, "CREATE_VOLUNTEER", "Volunteer", item.id, req.body, req.ip);
   res.status(201).json(item);
 });
 coreRouter.get("/volunteers/:id", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"), async (req, res) => res.json(await prisma.volunteer.findUniqueOrThrow({ where: { id: paramId(req.params.id) }, include: { user: true, tasks: true } })));
@@ -224,7 +331,9 @@ coreRouter.patch(
   async (req, res) => {
     const id = paramId(req.params.id);
     const status = String(req.body.status) as "OPEN" | "ACCEPTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-    res.json(await prisma.task.update({ where: { id }, data: { status } }));
+    const item = await prisma.task.update({ where: { id }, data: { status } });
+    await logAudit(req.user!.id, "UPDATE_TASK_STATUS", "Task", id, { status }, req.ip);
+    res.json(item);
   }
 );
 coreRouter.delete("/tasks/:id", authorize("ADMIN"), remove("task"));
@@ -284,6 +393,7 @@ coreRouter.post(
           channel: "SYSTEM"
         }
       });
+      await logAudit(req.user!.id, "SEND_NOTIFICATION_USER", "Notification", item.id, { targetUserId, title }, req.ip);
       res.status(201).json(item);
     } else if (targetType === "ROLE") {
       if (!targetRole) {
@@ -311,6 +421,7 @@ coreRouter.post(
         });
       }
 
+      await logAudit(req.user!.id, "SEND_NOTIFICATION_ROLE", "Notification", null, { targetRole, title }, req.ip);
       res.status(201).json({ message: `Message sent to all ${targetRole}s` });
     }
   }
@@ -330,6 +441,7 @@ coreRouter.delete("/notifications/:id", async (req, res) => {
     where: { id: paramId(id) }
   });
 
+  await logAudit(req.user!.id, "DELETE_NOTIFICATION", "Notification", id, null, req.ip);
   res.json({ message: "Notification removed" });
 });
 
@@ -525,16 +637,35 @@ function list(model: keyof typeof prisma, options: Record<string, unknown> = {})
   };
 }
 
-function create(model: keyof typeof prisma) {
-  return async (req: any, res: any) => res.status(201).json(await (prisma as any)[model].create({ data: req.body }));
+function create(model: string) {
+  return async (req: any, res: any) => {
+    const item = await (prisma as any)[model].create({ data: req.body });
+    if (req.user) {
+      await logAudit(req.user.id, `CREATE_${model.toUpperCase()}`, model, item.id, req.body, req.ip);
+    }
+    res.status(201).json(item);
+  };
 }
 
-function update(model: keyof typeof prisma) {
-  return async (req: any, res: any) => res.json(await (prisma as any)[model].update({ where: { id: req.params.id }, data: req.body }));
+function update(model: string) {
+  return async (req: any, res: any) => {
+    const item = await (prisma as any)[model].update({ where: { id: req.params.id }, data: req.body });
+    if (req.user) {
+      await logAudit(req.user.id, `UPDATE_${model.toUpperCase()}`, model, item.id, req.body, req.ip);
+    }
+    res.json(item);
+  };
 }
 
-function remove(model: keyof typeof prisma) {
-  return async (req: any, res: any) => res.json(await (prisma as any)[model].delete({ where: { id: paramId(req.params.id) } }));
+function remove(model: string) {
+  return async (req: any, res: any) => {
+    const id = paramId(req.params.id);
+    const item = await (prisma as any)[model].delete({ where: { id } });
+    if (req.user) {
+      await logAudit(req.user.id, `DELETE_${model.toUpperCase()}`, model, id, item, req.ip);
+    }
+    res.json(item);
+  };
 }
 
 function paramId(value: string | string[] | undefined) {

@@ -10,6 +10,7 @@ import { Badge, Button, Card, Input, Select, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const OperationsMap = dynamic(() => import("@/components/OperationsMap").then((m) => m.OperationsMap), { ssr: false });
+const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap").then((m) => m.LocationPickerMap), { ssr: false });
 
 type Disaster = { id: string; title: string; type: string; description: string; location: string; latitude: number; longitude: number; severity: string; status: string; imageUrl?: string };
 type Shelter = { id: string; name: string; address: string; latitude: number; longitude: number; capacity: number; occupiedBeds: number; contactPerson?: string; phone?: string };
@@ -37,6 +38,69 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const translations: Record<string, Record<string, string>> = {
+  en: {
+    dashboard: "Operations Dashboard",
+    overview: "Overview",
+    disasters: "Disasters",
+    requests: "Emergency Requests",
+    resources: "Resource Inventory",
+    shelters: "Shelters",
+    volunteers: "Volunteers",
+    learning: "Learning Center",
+    notifications: "Notification Center",
+    auditLogs: "System Audit Logs",
+    searchPlaceholder: "Search incidents...",
+    logout: "Logout",
+    offlineBanner: "Operational Alert: Network connection lost. Displaying cached dashboard data. Operations are read-only until online.",
+    activeDisasters: "Active Disasters",
+    availableResources: "Available Resources",
+    shelterOccupancy: "Shelter Occupancy",
+    openRequests: "Open Requests",
+    liveVolunteers: "Volunteers Available"
+  },
+  hi: {
+    dashboard: "संचालन डैशबोर्ड",
+    overview: "अवलोकन",
+    disasters: "आपदाएं",
+    requests: "आपातकालीन अनुरोध",
+    resources: "संसाधन सूची",
+    shelters: "आश्रय स्थल",
+    volunteers: "स्वयंसेवक",
+    learning: "शिक्षण केंद्र",
+    notifications: "सूचना केंद्र",
+    auditLogs: "सिस्टम ऑडिट लॉग",
+    searchPlaceholder: "घटनाओं की खोज करें...",
+    logout: "लॉगआउट",
+    offlineBanner: "संचालन चेतावनी: नेटवर्क कनेक्शन टूट गया है। कैश्ड डैशबोर्ड डेटा प्रदर्शित हो रहा है। ऑनलाइन होने तक संचालन केवल पढ़ने योग्य है।",
+    activeDisasters: "सक्रिय आपदाएं",
+    availableResources: "उपलब्ध संसाधन",
+    shelterOccupancy: "आश्रय अधिभोग",
+    openRequests: "खुले अनुरोध",
+    liveVolunteers: "उपलब्ध स्वयंसेवक"
+  },
+  pa: {
+    dashboard: "ਕਾਰਜਸ਼ੀਲ ਡੈਸ਼ਬੋਰਡ",
+    overview: "ਸੰਖੇਪ",
+    disasters: "ਆਫ਼ਤਾਂ",
+    requests: "ਐਮਰਜੈਂਸੀ ਬੇਨਤੀਆਂ",
+    resources: "ਸੰਸਾਧਨ ਸੂਚੀ",
+    shelters: "ਆਸਰਾ ਘਰ",
+    volunteers: "ਵਲੰਟੀਅਰ",
+    learning: "ਸਿੱਖਣ ਕੇਂਦਰ",
+    notifications: "ਸੂਚਨਾ ਕੇਂਦਰ",
+    auditLogs: "ਸਿਸਟਮ ਆਡਿਟ ਲੌਗਸ",
+    searchPlaceholder: "ਘਟਨਾਵਾਂ ਦੀ ਖੋਜ ਕਰੋ...",
+    logout: "ਲੌਗਆਊਟ",
+    offlineBanner: "ਕਾਰਜਸ਼ੀਲ ਚੇਤਾਵਨੀ: ਨੈੱਟਵਰਕ ਕਨੈਕਸ਼ਨ ਟੁੱਟ ਗਿਆ ਹੈ। ਕੈਸ਼ ਕੀਤਾ ਡੈਸ਼ਬੋਰਡ ਡੇਟਾ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ। ਆਨਲਾਈਨ ਹੋਣ ਤੱਕ ਕਾਰਵਾਈਆਂ ਸਿਰਫ਼ ਪੜ੍ਹਨਯੋਗ ਹਨ।",
+    activeDisasters: "ਸਰਗਰਮ ਆਫ਼ਤਾਂ",
+    availableResources: "ਉਪਲਬਧ ਸੰਸਾਧਨ",
+    shelterOccupancy: "ਆਸਰਾ ਕਬਜ਼ਾ",
+    openRequests: "ਖੁੱਲ੍ਹੀਆਂ ਬੇਨਤੀਆਂ",
+    liveVolunteers: "ਉਪਲਬਧ ਵਲੰਟੀਅਰ"
+  }
+};
+
 export default function Dashboard() {
   const [dark, setDark] = useState(false);
   const [tab, setTab] = useState("overview");
@@ -50,6 +114,25 @@ export default function Dashboard() {
   const [live, setLive] = useState("connecting");
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [lang, setLang] = useState<"en" | "hi" | "pa">("en");
+  const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
+
+  const t = (key: string) => translations[lang][key] || key;
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -75,8 +158,7 @@ export default function Dashboard() {
       });
   }, []);
 
-  useEffect(() => {
-    if (!authReady) return;
+  const refreshAllData = () => {
     Promise.all([
       api<ApiList<Disaster>>("/api/disasters"),
       api<ApiList<Shelter>>("/api/shelters"),
@@ -92,7 +174,67 @@ export default function Dashboard() {
       setVolunteers(v.data);
       setAnalytics(a);
     });
+  };
+
+  useEffect(() => {
+    if (!authReady) return;
+    refreshAllData();
+    (window as any).refreshAllData = refreshAllData;
   }, [authReady]);
+
+  // Load offline queue on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("drrcs_offline_queue");
+    if (saved) {
+      setOfflineQueue(JSON.parse(saved));
+    }
+  }, []);
+
+  async function queueOfflineAction(path: string, options: any, description: string) {
+    const newQueue = [...offlineQueue, { id: Math.random().toString(36).substring(2, 9), path, options, description, createdAt: new Date().toISOString() }];
+    setOfflineQueue(newQueue);
+    localStorage.setItem("drrcs_offline_queue", JSON.stringify(newQueue));
+  }
+
+  // Update window helper when queue changes
+  useEffect(() => {
+    (window as any).queueOfflineAction = queueOfflineAction;
+  }, [offlineQueue]);
+
+  async function syncOfflineQueue() {
+    const queueToProcess = [...offlineQueue];
+    setOfflineQueue([]);
+    localStorage.removeItem("drrcs_offline_queue");
+
+    let successCount = 0;
+    for (const item of queueToProcess) {
+      try {
+        await api(item.path, item.options);
+        successCount++;
+      } catch (err) {
+        console.error("Failed to sync offline item:", item, err);
+        if (err instanceof TypeError || (err instanceof Error && err.message.includes("Failed to fetch"))) {
+          setOfflineQueue((prev) => {
+            const updated = [...prev, item];
+            localStorage.setItem("drrcs_offline_queue", JSON.stringify(updated));
+            return updated;
+          });
+        }
+      }
+    }
+
+    if (successCount > 0) {
+      alert(`Sync Complete: ${successCount} queued offline action(s) synchronized successfully!`);
+      refreshAllData();
+    }
+  }
+
+  // Sync queue when online status restored
+  useEffect(() => {
+    if (isOnline && offlineQueue.length > 0) {
+      syncOfflineQueue();
+    }
+  }, [isOnline, offlineQueue]);
 
   useEffect(() => {
     const socket = io(API_URL);
@@ -220,17 +362,18 @@ export default function Dashboard() {
         <div className="mb-8 flex items-center gap-2 font-semibold"><ShieldAlert /> DRRCS</div>
         <nav className="space-y-1">
           {[
-            ["overview", Activity],
-            ["disasters", ShieldAlert],
-            ["requests", HandHeart],
-            ["resources", Boxes],
-            ["shelters", Home],
-            ["volunteers", Users],
-            ["learning center", BookOpen],
-            ["notifications", Bell]
-          ].map(([key, Icon]: any) => (
-            <button key={key} onClick={() => setTab(key)} className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm capitalize ${tab === key ? "bg-primary text-white" : "hover:bg-muted"}`}>
-              <Icon size={18} /> {key}
+            ["overview", Activity, t("overview")],
+            ["disasters", ShieldAlert, t("disasters")],
+            ["requests", HandHeart, t("requests")],
+            ["resources", Boxes, t("resources")],
+            ["shelters", Home, t("shelters")],
+            ["volunteers", Users, t("volunteers")],
+            ["learning center", BookOpen, t("learning")],
+            ["notifications", Bell, t("notifications")],
+            ...(user && ["ADMIN", "AUTHORITY"].includes(user.role.name) ? [["audit logs", ShieldAlert, t("auditLogs")]] : [])
+          ].map(([key, Icon, label]: any) => (
+            <button key={key} onClick={() => setTab(key)} className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${tab === key ? "bg-primary text-white" : "hover:bg-muted"}`}>
+              <Icon size={18} /> {label}
             </button>
           ))}
         </nav>
@@ -240,7 +383,14 @@ export default function Dashboard() {
         <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold capitalize">{tab === "overview" ? "Operations Dashboard" : tab}</h1>
+              <h1 className="text-xl font-semibold">
+                {tab === "overview" ? t("dashboard") : (
+                  tab === "learning center" ? t("learning") :
+                  tab === "notifications" ? t("notifications") :
+                  tab === "audit logs" ? t("auditLogs") :
+                  t(tab)
+                )}
+              </h1>
               <p className="text-sm text-foreground/60">
                 {user?.name} · {user?.role.name.replaceAll("_", " ")} · Realtime: {live}
               </p>
@@ -248,8 +398,13 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5" size={16} />
-                <Input className="w-56 pl-8" placeholder="Search incidents" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input className="w-56 pl-8" placeholder={t("searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
+              <Select value={lang} onChange={(e) => setLang(e.target.value as any)} className="w-24 h-10 py-1 text-xs">
+                <option value="en">English</option>
+                <option value="hi">हिन्दी</option>
+                <option value="pa">ਪੰਜਾਬੀ</option>
+              </Select>
               <Button className="px-3" onClick={() => setDark((v) => !v)} aria-label="Toggle dark mode">{dark ? <Sun size={18} /> : <Moon size={18} />}</Button>
               <Button className="gap-2" onClick={exportCsv}><Download size={16} /> CSV</Button>
               <Button className="gap-2 bg-foreground/20 text-foreground" onClick={logout}><LogOut size={16} /> Logout</Button>
@@ -257,13 +412,20 @@ export default function Dashboard() {
           </div>
         </header>
 
+        {!isOnline && (
+          <div className="bg-red-600 text-white px-4 py-2.5 text-center text-xs font-semibold flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300 shadow-md">
+            <span className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+            <span>{t("offlineBanner")}</span>
+          </div>
+        )}
+
         <div className="space-y-5 p-4">
           {tab === "overview" && (
             <>
               {/* Metrics Grid */}
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <Metric 
-                  label="Active Disasters" 
+                  label={t("activeDisasters")} 
                   value={filteredDisasters.length} 
                   icon={ShieldAlert}
                   color="bg-red-500/10 text-red-600 dark:text-red-400"
@@ -271,7 +433,7 @@ export default function Dashboard() {
                   indicatorColor="bg-red-500"
                 />
                 <Metric 
-                  label="Available Resources" 
+                  label={t("availableResources")} 
                   value={filteredResources.reduce((s, r) => s + r.quantity, 0)} 
                   icon={Boxes}
                   color="bg-blue-500/10 text-blue-600 dark:text-blue-400"
@@ -279,7 +441,7 @@ export default function Dashboard() {
                   indicatorColor="bg-blue-500"
                 />
                 <Metric 
-                  label="Shelter Occupancy" 
+                  label={t("shelterOccupancy")} 
                   value={search ? `${filteredShelters.reduce((s, sh) => s + sh.occupiedBeds, 0)}/${filteredShelters.reduce((s, sh) => s + sh.capacity, 0)}` : (analytics?.shelterOccupancy ? `${analytics.shelterOccupancy.occupied}/${analytics.shelterOccupancy.capacity}` : `${shelters.reduce((s, sh) => s + sh.occupiedBeds, 0)}/${shelters.reduce((s, sh) => s + sh.capacity, 0)}`)} 
                   icon={Home}
                   color="bg-green-500/10 text-green-600 dark:text-green-400"
@@ -287,7 +449,7 @@ export default function Dashboard() {
                   indicatorColor="bg-green-500"
                 />
                 <Metric 
-                  label="Open Requests" 
+                  label={t("openRequests")} 
                   value={filteredRequests.filter((r) => r.status === "PENDING" || r.status === "IN_PROGRESS").length} 
                   icon={HandHeart}
                   color="bg-amber-500/10 text-amber-600 dark:text-amber-400"
@@ -295,7 +457,7 @@ export default function Dashboard() {
                   indicatorColor="bg-amber-500"
                 />
                 <Metric 
-                  label="Volunteers" 
+                  label={t("volunteers")} 
                   value={filteredVolunteers.length} 
                   icon={Users}
                   color="bg-purple-500/10 text-purple-600 dark:text-purple-400"
@@ -517,7 +679,7 @@ export default function Dashboard() {
             </>
           )}
 
-          {tab === "disasters" && <DisasterPanel disasters={filteredDisasters} user={user} onCreated={(newDisaster) => { setDisasters((prev) => [newDisaster, ...prev]); refreshAnalytics(); }} />}
+          {tab === "disasters" && <DisasterPanel disasters={filteredDisasters} user={user} onCreated={(newDisaster) => { setDisasters((prev) => [newDisaster, ...prev]); refreshAnalytics(); }} onUpdate={(updated) => { setDisasters((prev) => prev.map((d) => d.id === updated.id ? updated : d)); refreshAnalytics(); }} />}
           {tab === "requests" && (
             <RequestPanel
               requests={filteredRequests}
@@ -567,6 +729,7 @@ export default function Dashboard() {
           )}
           {tab === "learning center" && <LearningCenter />}
           {tab === "notifications" && <NotificationCenter user={user} />}
+          {tab === "audit logs" && <AuditLogsPanel />}
         </div>
         <ChatWidget />
       </section>
@@ -689,9 +852,20 @@ function ResourcePanel({ resources, user, onCreated }: { resources: Resource[]; 
         throw new Error("Category is required");
       }
 
-      const created = await api<Resource>("/api/resources", {
-        method: "POST",
-        body: JSON.stringify({
+      const payload = {
+        name,
+        category: finalCategory,
+        quantity: Number(quantity),
+        location,
+        provider,
+        status,
+        latitude: latitude ? Number(latitude) : undefined,
+        longitude: longitude ? Number(longitude) : undefined,
+      };
+
+      if (!navigator.onLine) {
+        onCreated({
+          id: "offline_" + Math.random().toString(36).substring(2, 9),
           name,
           category: finalCategory,
           quantity: Number(quantity),
@@ -700,7 +874,30 @@ function ResourcePanel({ resources, user, onCreated }: { resources: Resource[]; 
           status,
           latitude: latitude ? Number(latitude) : undefined,
           longitude: longitude ? Number(longitude) : undefined,
-        }),
+        });
+        (window as any).queueOfflineAction("/api/resources", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        }, `Add resource: ${name}`);
+
+        setName("");
+        setCategory("Water");
+        setCustomCategory("");
+        setQuantity(0);
+        setLocation("");
+        setProvider("");
+        setStatus("AVAILABLE");
+        setLatitude("");
+        setLongitude("");
+        setShowAddForm(false);
+        setMessage("Offline Mode: Resource queued. It will sync automatically when connection returns.");
+        setSubmitting(false);
+        return;
+      }
+
+      const created = await api<Resource>("/api/resources", {
+        method: "POST",
+        body: JSON.stringify(payload),
       });
 
       onCreated(created);
@@ -955,9 +1152,20 @@ function ShelterPanel({ shelters, user, onCreated }: { shelters: Shelter[]; user
         throw new Error("Please fill in all required fields.");
       }
 
-      const created = await api<Shelter>("/api/shelters", {
-        method: "POST",
-        body: JSON.stringify({
+      const payload = {
+        name,
+        address,
+        capacity: Number(capacity),
+        occupiedBeds: Number(occupiedBeds),
+        contactPerson,
+        phone: phone || undefined,
+        latitude: Number(latitude),
+        longitude: Number(longitude)
+      };
+
+      if (!navigator.onLine) {
+        onCreated({
+          id: "offline_" + Math.random().toString(36).substring(2, 9),
           name,
           address,
           capacity: Number(capacity),
@@ -966,7 +1174,29 @@ function ShelterPanel({ shelters, user, onCreated }: { shelters: Shelter[]; user
           phone: phone || undefined,
           latitude: Number(latitude),
           longitude: Number(longitude)
-        })
+        });
+        (window as any).queueOfflineAction("/api/shelters", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        }, `Add shelter: ${name}`);
+
+        setName("");
+        setAddress("");
+        setCapacity(0);
+        setOccupiedBeds(0);
+        setContactPerson("");
+        setPhone("");
+        setLatitude("");
+        setLongitude("");
+        setShowAddForm(false);
+        setMessage("Offline Mode: Shelter queued. It will sync automatically when connection returns.");
+        setSubmitting(false);
+        return;
+      }
+
+      const created = await api<Shelter>("/api/shelters", {
+        method: "POST",
+        body: JSON.stringify(payload)
       });
 
       onCreated(created);
@@ -1196,7 +1426,7 @@ function ShelterPanel({ shelters, user, onCreated }: { shelters: Shelter[]; user
   );
 }
 
-function DisasterPanel({ disasters, user, onCreated }: { disasters: Disaster[]; user: CurrentUser | null; onCreated: (disaster: Disaster) => void }) {
+function DisasterPanel({ disasters, user, onCreated, onUpdate }: { disasters: Disaster[]; user: CurrentUser | null; onCreated: (disaster: Disaster) => void; onUpdate: (disaster: Disaster) => void }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState("");
   const [type, setType] = useState("FLOOD");
@@ -1211,8 +1441,27 @@ function DisasterPanel({ disasters, user, onCreated }: { disasters: Disaster[]; 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedDisaster, setSelectedDisaster] = useState<Disaster | null>(null);
+  const [settlingId, setSettlingId] = useState<string | null>(null);
 
   const canAdd = user && ["ADMIN", "AUTHORITY", "NGO_COORDINATOR"].includes(user.role.name);
+  const canSettle = user && ["ADMIN", "NGO_COORDINATOR"].includes(user.role.name);
+
+  async function handleSettleDisaster(id: string) {
+    setSettlingId(id);
+    try {
+      const updated = await api<Disaster>(`/api/disasters/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "RESOLVED" })
+      });
+      onUpdate(updated);
+      setSelectedDisaster(updated);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to settle disaster.");
+    } finally {
+      setSettlingId(null);
+    }
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1233,9 +1482,22 @@ function DisasterPanel({ disasters, user, onCreated }: { disasters: Disaster[]; 
         throw new Error("Please fill in all required fields.");
       }
 
-      const created = await api<Disaster>("/api/disasters", {
-        method: "POST",
-        body: JSON.stringify({
+      const payload = {
+        title,
+        type,
+        description,
+        location,
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        severity,
+        startDate: new Date(startDate).toISOString(),
+        status,
+        imageUrl: photo || undefined
+      };
+
+      if (!navigator.onLine) {
+        onCreated({
+          id: "offline_" + Math.random().toString(36).substring(2, 9),
           title,
           type,
           description,
@@ -1243,10 +1505,33 @@ function DisasterPanel({ disasters, user, onCreated }: { disasters: Disaster[]; 
           latitude: Number(latitude),
           longitude: Number(longitude),
           severity,
-          startDate: new Date(startDate).toISOString(),
           status,
           imageUrl: photo || undefined
-        })
+        });
+        (window as any).queueOfflineAction("/api/disasters", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        }, `Report disaster: ${title}`);
+
+        setTitle("");
+        setType("FLOOD");
+        setDescription("");
+        setLocation("");
+        setLatitude("");
+        setLongitude("");
+        setSeverity("MEDIUM");
+        setStartDate(new Date().toISOString().split("T")[0]);
+        setStatus("ACTIVE");
+        setPhoto(null);
+        setShowAddForm(false);
+        setMessage("Offline Mode: Disaster reported and queued. It will sync automatically when connection returns.");
+        setSubmitting(false);
+        return;
+      }
+
+      const created = await api<Disaster>("/api/disasters", {
+        method: "POST",
+        body: JSON.stringify(payload)
       });
 
       onCreated(created);
@@ -1362,6 +1647,18 @@ function DisasterPanel({ disasters, user, onCreated }: { disasters: Disaster[]; 
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground/70">Interactive Location Picker (Click to Pick Location)</label>
+              <LocationPickerMap
+                latitude={latitude && !isNaN(Number(latitude)) ? Number(latitude) : null}
+                longitude={longitude && !isNaN(Number(longitude)) ? Number(longitude) : null}
+                onChange={(lat, lng) => {
+                  setLatitude(lat.toFixed(6));
+                  setLongitude(lng.toFixed(6));
+                }}
+              />
             </div>
 
             <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr] items-end">
@@ -1480,8 +1777,17 @@ function DisasterPanel({ disasters, user, onCreated }: { disasters: Disaster[]; 
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
-                <Button onClick={() => setSelectedDisaster(null)} className="px-5">
+              <div className="flex justify-end gap-2 pt-2">
+                {canSettle && selectedDisaster.status !== "RESOLVED" && (
+                  <Button
+                    onClick={() => handleSettleDisaster(selectedDisaster.id)}
+                    disabled={settlingId === selectedDisaster.id}
+                    className="bg-green-600 hover:bg-green-700 text-white border-none"
+                  >
+                    {settlingId === selectedDisaster.id ? "Settling..." : "Settle Disaster"}
+                  </Button>
+                )}
+                <Button onClick={() => setSelectedDisaster(null)} className="px-5 bg-muted text-foreground hover:bg-muted/80 border-none">
                   Close Details
                 </Button>
               </div>
@@ -1489,6 +1795,126 @@ function DisasterPanel({ disasters, user, onCreated }: { disasters: Disaster[]; 
           </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+function AllocationModal({
+  requestId,
+  onClose,
+  onSuccess
+}: {
+  requestId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [resources, setResources] = useState<any[]>([]);
+  const [selectedResourceId, setSelectedResourceId] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api<ApiList<any>>("/api/resources")
+      .then((res) => {
+        const available = res.data.filter((r: any) => r.quantity > 0 && r.status === "AVAILABLE");
+        setResources(available);
+        if (available.length > 0) {
+          setSelectedResourceId(available[0].id);
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedResourceId) return;
+    setSubmitting(true);
+    setError("");
+
+    try {
+      await api(`/api/requests/${requestId}/allocate`, {
+        method: "POST",
+        body: JSON.stringify({
+          resourceId: selectedResourceId,
+          allocatedQuantity: Number(quantity)
+        })
+      });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to allocate resources");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <Card className="w-full max-w-md p-6 bg-background shadow-2xl rounded-2xl border border-border animate-in scale-in-95 duration-200">
+        <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
+          <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+            <Boxes className="text-primary" /> Allocate Relief Stock
+          </h3>
+          <button onClick={onClose} className="text-foreground/60 hover:text-foreground">
+            <X size={18} />
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-foreground/60">Loading available inventory...</p>
+        ) : resources.length === 0 ? (
+          <div className="space-y-4">
+            <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+              No available resources in inventory. Please add resources first before allocating to this request.
+            </p>
+            <Button onClick={onClose} className="w-full">Close</Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground/70">Select Resource Stock *</label>
+              <Select value={selectedResourceId} onChange={(e) => setSelectedResourceId(e.target.value)}>
+                {resources.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.category}) - Stock: {r.quantity} available at {r.location}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground/70">Allocation Quantity *</label>
+              <Input
+                type="number"
+                min={1}
+                max={resources.find((r) => r.id === selectedResourceId)?.quantity || 1}
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                required
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-500 bg-red-500/10 p-2.5 rounded-lg border border-red-500/20">
+                {error}
+              </p>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button type="button" className="bg-foreground/10 text-foreground" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Allocating..." : "Confirm Allocation"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Card>
     </div>
   );
 }
@@ -1510,10 +1936,12 @@ function RequestPanel({
   const [photo, setPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [allocatingRequestId, setAllocatingRequestId] = useState<string | null>(null);
 
   const visibleRequests = requests.filter((r) => r.status === "PENDING" || r.status === "IN_PROGRESS");
 
   const canUpdateStatus = user && ["ADMIN", "AUTHORITY", "NGO_COORDINATOR", "VOLUNTEER"].includes(user.role.name);
+  const canAllocate = user && ["ADMIN", "AUTHORITY", "NGO_COORDINATOR"].includes(user.role.name);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1529,17 +1957,43 @@ function RequestPanel({
     setSubmitting(true);
     setMessage("");
 
+    const payload = {
+      requestType,
+      priority,
+      description,
+      latitude: 31.3959,
+      longitude: 75.5350,
+      imageUrl: photo || undefined
+    };
+
+    if (!navigator.onLine) {
+      onCreated({
+        id: "offline_" + Math.random().toString(36).substring(2, 9),
+        requestType,
+        description,
+        latitude: 31.3959,
+        longitude: 75.5350,
+        priority,
+        status: "PENDING",
+        imageUrl: photo || undefined,
+        user: { name: user?.name || "You", email: user?.email || "" }
+      });
+      (window as any).queueOfflineAction("/api/requests", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      }, `Report emergency request: ${requestType}`);
+
+      setDescription("");
+      setPhoto(null);
+      setMessage("Offline Mode: Emergency request queued. It will sync automatically when connection returns.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const created = await api<Request>("/api/requests", {
         method: "POST",
-        body: JSON.stringify({
-          requestType,
-          priority,
-          description,
-          latitude: 31.3959,
-          longitude: 75.5350,
-          imageUrl: photo || undefined
-        })
+        body: JSON.stringify(payload)
       });
       onCreated(created);
       setDescription("");
@@ -1638,20 +2092,40 @@ function RequestPanel({
               <p className="text-sm text-foreground/70 mb-2">{r.description}</p>
               <p className="text-xs text-foreground/50 mb-4">Requested by: {r.user?.name || "Citizen"}</p>
             </div>
-            <Select 
-              value={r.status} 
-              disabled={!canUpdateStatus} 
-              onChange={(e) => handleStatusChange(r.id, e.target.value)}
-            >
-              <option value="PENDING">PENDING</option>
-              <option value="ASSIGNED">ASSIGNED</option>
-              <option value="IN_PROGRESS">IN_PROGRESS</option>
-              <option value="RESOLVED">RESOLVED</option>
-              <option value="CANCELLED">CANCELLED</option>
-            </Select>
+            <div className="space-y-2.5">
+              <Select 
+                value={r.status} 
+                disabled={!canUpdateStatus} 
+                onChange={(e) => handleStatusChange(r.id, e.target.value)}
+              >
+                <option value="PENDING">PENDING</option>
+                <option value="ASSIGNED">ASSIGNED</option>
+                <option value="IN_PROGRESS">IN_PROGRESS</option>
+                <option value="RESOLVED">RESOLVED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </Select>
+              {canAllocate && r.status === "PENDING" && (
+                <Button onClick={() => setAllocatingRequestId(r.id)} className="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs h-9 font-bold">
+                  Allocate Resources
+                </Button>
+              )}
+            </div>
           </Card>
         ))}
       </div>
+
+      {allocatingRequestId && (
+        <AllocationModal
+          requestId={allocatingRequestId}
+          onClose={() => setAllocatingRequestId(null)}
+          onSuccess={() => {
+            onStatusChanged(allocatingRequestId, "ASSIGNED");
+            if ((window as any).refreshAllData) {
+              (window as any).refreshAllData();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -2043,241 +2517,629 @@ function ChatWidget() {
 }
 
 function LearningCenter() {
-  const [activeSubTab, setActiveSubTab] = useState<"all" | "flood" | "earthquake" | "fire" | "firstaid">("all");
+  const [activeTopic, setActiveTopic] = useState("flood");
+  const [activeSubTab, setActiveSubTab] = useState<"steps" | "checklist" | "quiz">("steps");
+
+  const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
+  const [certifications, setCertifications] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const savedCheck = localStorage.getItem("drrcs_learning_checklist");
+    if (savedCheck) setChecklistState(JSON.parse(savedCheck));
+
+    const savedCerts = localStorage.getItem("drrcs_learning_certs");
+    if (savedCerts) setCertifications(JSON.parse(savedCerts));
+  }, []);
+
+  const toggleChecklistItem = (itemId: string) => {
+    const nextState = { ...checklistState, [itemId]: !checklistState[itemId] };
+    setChecklistState(nextState);
+    localStorage.setItem("drrcs_learning_checklist", JSON.stringify(nextState));
+  };
+
+  const markCertified = (topicId: string) => {
+    const nextCerts = { ...certifications, [topicId]: true };
+    setCertifications(nextCerts);
+    localStorage.setItem("drrcs_learning_certs", JSON.stringify(nextCerts));
+  };
+
+  const quizzes: Record<string, {
+    question: string;
+    options: string[];
+    answerIndex: number;
+    explanation: string;
+  }[]> = {
+    flood: [
+      {
+        question: "What is the minimum height of moving water that can knock an adult off their feet?",
+        options: ["6 inches", "12 inches", "2 feet", "3 feet"],
+        answerIndex: 0,
+        explanation: "Just 6 inches of moving water can sweep a person off their feet, and 12 inches can float most small cars."
+      },
+      {
+        question: "If advised to evacuate during a flood, when should you start moving?",
+        options: ["Immediately", "Wait until floodwaters reach your doorstep", "Wait for secondary confirmation", "Pack all household belongings first"],
+        answerIndex: 0,
+        explanation: "Evacuate immediately. Delayed action often leads to citizens becoming trapped in rising waters."
+      }
+    ],
+    earthquake: [
+      {
+        question: "When the ground starts shaking inside a building, what is the best immediate action?",
+        options: ["Run outdoors as fast as possible", "Take the elevator to reach ground floor", "Drop, Cover, and Hold On under a sturdy table", "Stand firmly in a doorway"],
+        answerIndex: 2,
+        explanation: "Drop, Cover, and Hold On is the gold standard for indoor earthquake survival. Doors and hallways are not safer."
+      },
+      {
+        question: "If you are driving when an earthquake starts, where should you stop?",
+        options: ["Under an overpass for protection", "In an open area away from structures, trees, and power lines", "On a bridge to keep above ground levels", "Directly next to a tall building"],
+        answerIndex: 1,
+        explanation: "Avoid stopping near structures, overpasses, bridges, or trees that can collapse onto your vehicle."
+      }
+    ],
+    fire: [
+      {
+        question: "Why should you crawl low on your hands and knees in a smoke-filled room?",
+        options: ["It is faster than walking", "Smoke, heat, and toxic gases rise, leaving clean air closer to the floor", "It makes you less visible to the fire", "To avoid triggering automated sprinklers"],
+        answerIndex: 1,
+        explanation: "Smoke and poisonous gases accumulate at the ceiling. Crawling protects you from breathing toxic, superheated air."
+      },
+      {
+        question: "What does the 'PASS' acronym stand for when using a fire extinguisher?",
+        options: [
+          "Push, Aim, Spray, Sweep",
+          "Pull, Aim, Squeeze, Sweep",
+          "Pin, Aim, Squeeze, Spread",
+          "Pull, Activate, Spray, Settle"
+        ],
+        answerIndex: 1,
+        explanation: "PASS stands for: Pull the pin, Aim at the base of the fire, Squeeze the lever, and Sweep side-to-side."
+      }
+    ],
+    firstaid: [
+      {
+        question: "What is the correct compression rate for performing adult CPR?",
+        options: ["60–80 compressions/minute", "80–100 compressions/minute", "100–120 compressions/minute", "120–140 compressions/minute"],
+        answerIndex: 2,
+        explanation: "The recommended rate is 100–120 compressions per minute, which matches the rhythm of the song 'Staying Alive'."
+      },
+      {
+        question: "How should you control severe bleeding from an open wound?",
+        options: ["Wash it with running tap water immediately", "Apply firm, direct pressure with a clean dressing", "Keep the limb lower than the heart", "Apply butter or oil to seal the wound"],
+        answerIndex: 1,
+        explanation: "Direct pressure is the most effective way to stop bleeding. Never apply fats or oils to wounds."
+      }
+    ]
+  };
 
   const topics = [
     {
       id: "flood",
-      title: "Flood Safety & Evacuation Guide",
-      category: "Flood Safety",
-      color: "border-blue-500/30 text-blue-500 bg-blue-50/10",
-      description: "Learn how to prepare, stay safe during a flood, and recover safely afterwards.",
-      content: (
-        <div className="space-y-4">
-          <div>
-            <h4 className="font-semibold text-teal-500 mb-2 flex items-center gap-1.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-500/20 text-xs font-bold text-teal-400">1</span>
-              Before a Flood (Preparation)
-            </h4>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
-              <li>Identify local evacuation routes and emergency shelter locations.</li>
-              <li>Assemble a 72-hour emergency kit (water, non-perishable food, flashlight, first aid, batteries).</li>
-              <li>Move valuables and critical electrical items to higher floors.</li>
-              <li>Keep documents and papers in watertight containers.</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold text-amber-500 mb-2 flex items-center gap-1.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-50/20 text-xs font-bold text-amber-400">2</span>
-              During a Flood (Immediate Action)
-            </h4>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
-              <li><strong>Turn around, don't drown!</strong> Never walk, swim, or drive through floodwaters. Just 6 inches of moving water can knock you down, and 12 inches can sweep a vehicle away.</li>
-              <li>If told to evacuate, do so immediately. Lock your home and turn off main power switches and gas valves.</li>
-              <li>Move to higher ground or the highest floor of your building. Do not climb into a closed attic; go to the roof only if necessary.</li>
-              <li>Monitor local radio, TV, or emergency alerts for instructions.</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold text-green-500 mb-2 flex items-center gap-1.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-green-50/20 text-xs font-bold text-green-400">3</span>
-              After a Flood (Recovery & Safety)
-            </h4>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
-              <li>Return home only when local authorities declare it safe.</li>
-              <li>Avoid standing water, as it may be contaminated with sewage or carry active electrical currents from downed lines.</li>
-              <li>Do not use water that might be contaminated. Boil or filter water before drinking, cooking, or brushing teeth.</li>
-              <li>Inspect your home for structural damage, mold, and gas leaks before entering.</li>
-            </ul>
-          </div>
-        </div>
-      )
+      title: "Flood Preparedness",
+      category: "Floods",
+      color: "border-blue-500/20 text-blue-500 bg-blue-500/5",
+      badgeColor: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+      description: "Survival strategies and checklist for flood operations.",
+      before: [
+        "Map local evacuation routes to high-elevation areas.",
+        "Secure emergency kit supplies (water, canned food, medicine, flashlight).",
+        "Move high-value equipment and documents to upper floors.",
+        "Know how to shut off home electricity and gas lines."
+      ],
+      during: [
+        "Never walk or drive through moving water - 6 inches can knock you down.",
+        "Evacuate immediately if instructed by disaster authority.",
+        "Move to the roof or highest floor level if trapped; do not enter a closed attic.",
+        "Keep listening to local emergency broadcasts."
+      ],
+      after: [
+        "Only return home when local coordinators confirm it is safe.",
+        "Avoid contact with floodwaters as they may be contaminated.",
+        "Boil all drinking water until city pipes are tested and cleared.",
+        "Document structural damage with photos before cleaning."
+      ],
+      checklist: [
+        { id: "flood_kit_water", text: "3 gallons of water per person (1 gallon/day for 3 days)" },
+        { id: "flood_kit_food", text: "3-day supply of non-perishable canned food" },
+        { id: "flood_kit_radio", text: "Battery-powered NOAA weather radio" },
+        { id: "flood_kit_docs", text: "Watertight envelope containing IDs and deeds" }
+      ]
     },
     {
       id: "earthquake",
-      title: "Earthquake Survival Guidelines",
-      category: "Earthquake Safety",
-      color: "border-orange-500/30 text-orange-500 bg-orange-50/10",
-      description: "Critical safety measures to follow when the ground starts shaking.",
-      content: (
-        <div className="space-y-4">
-          <div>
-            <h4 className="font-semibold text-red-500 mb-2 flex items-center gap-1.5">Drop, Cover, and Hold On</h4>
-            <div className="grid gap-3 sm:grid-cols-3 text-center mb-3">
-              <div className="p-3 rounded-lg border border-border bg-muted/40">
-                <p className="font-bold text-lg text-primary">1. DROP</p>
-                <p className="text-xs text-foreground/70 mt-1">Drop onto your hands and knees. This position protects you from being knocked down.</p>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-muted/40">
-                <p className="font-bold text-lg text-primary">2. COVER</p>
-                <p className="text-xs text-foreground/70 mt-1">Cover your head and neck under a sturdy table or desk. If none is nearby, crawl to an interior wall.</p>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-muted/40">
-                <p className="font-bold text-lg text-primary">3. HOLD ON</p>
-                <p className="text-xs text-foreground/70 mt-1">Hold on to your shelter until the shaking stops. Be prepared to move with it if it shifts.</p>
-              </div>
-            </div>
-          </div>
-          <div>
-            <h4 className="font-semibold text-teal-500 mb-2 flex items-center gap-1.5">Where You Are Matters</h4>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
-              <li><strong>Indoors:</strong> Stay inside. Do not run outside or stand in doorways. Avoid windows, mirrors, hanging objects, and tall furniture.</li>
-              <li><strong>Outdoors:</strong> Move to a clear, open area away from buildings, streetlights, utility wires, and bridges. Drop and cover your head.</li>
-              <li><strong>In a Vehicle:</strong> Pull over safely to a clear area. Avoid stopping under bridges, overpasses, utility wires, or next to buildings. Stay inside the car.</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold text-green-500 mb-2 flex items-center gap-1.5">After the Shaking Stops</h4>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
-              <li>Expect aftershocks. Each time you feel one, Drop, Cover, and Hold On.</li>
-              <li>Check yourself and others for injuries. Administer basic first aid if necessary.</li>
-              <li>Check your home for gas leaks or fire hazards. If you smell gas, turn off the main valve.</li>
-              <li>Avoid elevators. Use stairs if you need to evacuate a building.</li>
-            </ul>
-          </div>
-        </div>
-      )
+      title: "Earthquake Response",
+      category: "Earthquakes",
+      color: "border-amber-500/20 text-amber-500 bg-amber-500/5",
+      badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+      description: "Drop, Cover, and Hold survival drills.",
+      before: [
+        "Anchor heavy tall cupboards and shelves to wall studs.",
+        "Avoid hanging heavy pictures or mirrors above beds.",
+        "Identify secure spots in each room (under tables, interior walls).",
+        "Keep solid shoes and a flashlight next to your bed."
+      ],
+      during: [
+        "DROP to your hands and knees to prevent being thrown.",
+        "COVER your head and neck under a heavy table or desk.",
+        "HOLD ON to your shelter until the shaking fully stops.",
+        "Do not run outside or stand in doorways - falling debris is the main hazard."
+      ],
+      after: [
+        "Check yourself and nearby people for active injuries.",
+        "Expect aftershocks - repeat Drop, Cover, and Hold on each shake.",
+        "Check gas valves; shut them off if you smell gas leaks.",
+        "Do not use elevators; walk down stairs carefully."
+      ],
+      checklist: [
+        { id: "quake_kit_shoes", text: "Heavy-soled shoes next to the bed" },
+        { id: "quake_kit_ext", text: "Working fire extinguisher in accessible spot" },
+        { id: "quake_kit_firstaid", text: "Standard first aid dressing kit" },
+        { id: "quake_kit_whistle", text: "Whistle to signal search teams if trapped" }
+      ]
     },
     {
       id: "fire",
-      title: "Fire Safety & Evacuation Plan",
-      category: "Fire Safety",
-      color: "border-red-500/30 text-red-500 bg-red-50/10",
-      description: "Prevent home fires and know how to escape quickly if a fire breaks out.",
-      content: (
-        <div className="space-y-4">
-          <div>
-            <h4 className="font-semibold text-red-500 mb-2 flex items-center gap-1.5">In Case of Fire: Escape Immediately</h4>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
-              <li><strong>Get low and crawl:</strong> Smoke rises, carrying heat and toxic gases. Crawl on your hands and knees where the air is cleaner.</li>
-              <li><strong>Test doors before opening:</strong> Feel the door and handle with the back of your hand. If they are hot, do not open. Use an alternate escape route.</li>
-              <li><strong>Never use elevators:</strong> Power outages can trap you inside. Always use the stairs.</li>
-              <li><strong>Once out, stay out:</strong> Never go back inside a burning building for any reason. Call emergency services from outside.</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold text-amber-500 mb-2 flex items-center gap-1.5">If Your Clothes Catch Fire: Stop, Drop, and Roll</h4>
-            <div className="grid gap-3 sm:grid-cols-3 text-center mb-1">
-              <div className="p-2.5 rounded-lg border border-border bg-muted/40 text-xs">
-                <p className="font-bold text-sm text-amber-500">1. STOP</p>
-                <p className="mt-1">Stop moving immediately. Running fans the flames and makes the fire burn faster.</p>
-              </div>
-              <div className="p-2.5 rounded-lg border border-border bg-muted/40 text-xs">
-                <p className="font-bold text-sm text-amber-500">2. DROP</p>
-                <p className="mt-1">Drop to the ground and cover your face with your hands to protect your eyes and mouth.</p>
-              </div>
-              <div className="p-2.5 rounded-lg border border-border bg-muted/40 text-xs">
-                <p className="font-bold text-sm text-amber-500">3. ROLL</p>
-                <p className="mt-1">Roll back and forth repeatedly until the flames are completely smothered.</p>
-              </div>
-            </div>
-          </div>
-          <div>
-            <h4 className="font-semibold text-teal-500 mb-2 flex items-center gap-1.5">How to Use a Fire Extinguisher (P.A.S.S.)</h4>
-            <ol className="list-decimal pl-5 space-y-1 text-sm text-foreground/80">
-              <li><strong>P - Pull:</strong> Pull the safety pin to break the seal.</li>
-              <li><strong>A - Aim:</strong> Aim the nozzle at the base of the fire, not the flames.</li>
-              <li><strong>S - Squeeze:</strong> Squeeze the lever slowly to discharge the extinguishing agent.</li>
-              <li><strong>S - Sweep:</strong> Sweep the nozzle side-to-side across the base of the fire until it goes out.</li>
-            </ol>
-          </div>
-        </div>
-      )
+      title: "Fire Safety Plans",
+      category: "Fires",
+      color: "border-red-500/20 text-red-500 bg-red-500/5",
+      badgeColor: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+      description: "Evacuation paths and fire extinguisher training.",
+      before: [
+        "Install smoke alarms on every level of your house.",
+        "Test smoke detectors monthly and replace batteries yearly.",
+        "Establish two escape routes out of every room.",
+        "Practice home fire escape drills at least twice a year."
+      ],
+      during: [
+        "Crawl low on hands and knees to stay under toxic rising smoke.",
+        "Feel doors with the back of your hand before opening; if hot, keep it closed.",
+        "If clothing catches fire, STOP, DROP to the ground, and ROLL to extinguish.",
+        "Once outside, do not re-enter for any reason; call emergency dispatch immediately."
+      ],
+      after: [
+        "Wait for fire coordinators to declare the building safe before entering.",
+        "Check with the local department to ensure utilities are safe to turn on.",
+        "Discard any food, drink, or medicine exposed to heat or soot.",
+        "Contact your insurance agent immediately."
+      ],
+      checklist: [
+        { id: "fire_kit_detector", text: "Installed smoke detectors on all floors" },
+        { id: "fire_kit_ladder", text: "Escape ladder for second-story rooms" },
+        { id: "fire_kit_extinguisher", text: "Dry chemical ABC fire extinguisher" }
+      ]
     },
     {
       id: "firstaid",
-      title: "Essential First Aid Tutorials",
+      title: "First Aid Training",
       category: "First Aid",
-      color: "border-green-500/30 text-green-500 bg-green-50/10",
-      description: "Quick reference step-by-step guides for basic life-saving medical response.",
-      content: (
-        <div className="space-y-4">
-          <div>
-            <h4 className="font-semibold text-red-500 mb-2 flex items-center gap-1.5">Cardiopulmonary Resuscitation (CPR) Guide</h4>
-            <p className="text-xs text-foreground/60 mb-2">Use CPR when an adult is unresponsive and not breathing normally.</p>
-            <ol className="list-decimal pl-5 space-y-1 text-sm text-foreground/80">
-              <li><strong>Check Responsiveness:</strong> Shake the shoulders and ask loudly, "Are you okay?" Check for chest rise.</li>
-              <li><strong>Call for Help:</strong> Dial emergency services immediately. Get an AED (Defibrillator) if available.</li>
-              <li><strong>Perform Chest Compressions:</strong> Place the heel of one hand in the center of the chest. Interlock your other hand on top. Push hard and fast (100–120 compressions per minute, 2 inches deep) to the beat of "Staying Alive".</li>
-              <li><strong>Rescue Breaths:</strong> If trained, tilt the head back, pinch the nose, and give 2 rescue breaths after every 30 compressions. Repeat cycle until help arrives.</li>
-            </ol>
-          </div>
-          <div>
-            <h4 className="font-semibold text-amber-500 mb-2 flex items-center gap-1.5">Controlling Heavy Bleeding</h4>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
-              <li><strong>Apply Direct Pressure:</strong> Cover the wound with a clean sterile dressing and press firmly with both hands.</li>
-              <li><strong>Maintain Pressure:</strong> Do not release pressure to check the wound. Keep pressing until bleeding stops. Wrap firmly with a bandage.</li>
-              <li><strong>Elevate:</strong> If possible, raise the injured limb above heart level to reduce blood flow to the wound.</li>
-              <li><strong>Tourniquet:</strong> For severe arterial bleeding that won't stop, apply a commercial tourniquet 2 inches above the wound (never on a joint).</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold text-teal-500 mb-2 flex items-center gap-1.5">Treating Burns & Fractures</h4>
-            <div className="grid gap-3 sm:grid-cols-2 text-xs">
-              <div className="p-3 rounded-lg border border-border bg-muted/40">
-                <p className="font-bold text-teal-500">Burns Care</p>
-                <p className="mt-1">Cool the burn under cool, clean running water for 10–20 minutes. Cover loosely with a sterile, non-stick dressing. Do not apply ice, butter, or oils. Do not pop blisters.</p>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-muted/40">
-                <p className="font-bold text-teal-500">Fracture Care</p>
-                <p className="mt-1">Do not attempt to realign the bone. Immobilize the limb using a splint or sling. Apply a cold pack wrapped in a cloth to reduce swelling. Seek medical help immediately.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )
+      color: "border-green-500/20 text-green-500 bg-green-500/5",
+      badgeColor: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+      description: "Life-saving medical techniques.",
+      before: [
+        "Store a complete first aid kit in your home and vehicle.",
+        "Enroll in certified Red Cross first aid and CPR courses.",
+        "Keep list of emergency contacts visible.",
+        "Understand your family's specific medical histories."
+      ],
+      during: [
+        "Ensure the scene is safe before approaching an injured person.",
+        "For heavy bleeding, apply firm, direct pressure with a clean cloth.",
+        "For cardiac arrest, call emergency services and begin rapid chest compressions.",
+        "Keep the victim warm and calm until professional medics arrive."
+      ],
+      after: [
+        "Replenish any used first aid supplies immediately.",
+        "File an incident log if working under NGO command.",
+        "Wash hands thoroughly after administering any medical aid."
+      ],
+      checklist: [
+        { id: "aid_kit_bandage", text: "Sterile gauze pads and adhesive bandages" },
+        { id: "aid_kit_gloves", text: "Nitrile disposable gloves (minimum 2 pairs)" },
+        { id: "aid_kit_scissors", text: "Medical shears and tweezers" },
+        { id: "aid_kit_antiseptic", text: "Antiseptic wipes and antibiotic ointment" }
+      ]
     }
   ];
 
-  const filteredTopics = activeSubTab === "all" ? topics : topics.filter((t) => t.id === activeSubTab);
+  const currentTopic = topics.find((t) => t.id === activeTopic) || topics[0];
+
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [showQuizResults, setShowQuizResults] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+
+  const handleSelectAnswer = (qIdx: number, oIdx: number) => {
+    if (showQuizResults) return;
+    setSelectedAnswers((prev) => ({ ...prev, [qIdx]: oIdx }));
+  };
+
+  const handleGradeQuiz = () => {
+    let score = 0;
+    const questions = quizzes[activeTopic];
+    questions.forEach((q, idx) => {
+      if (selectedAnswers[idx] === q.answerIndex) {
+        score++;
+      }
+    });
+    setQuizScore(score);
+    setShowQuizResults(true);
+    if (score === questions.length) {
+      markCertified(activeTopic);
+    }
+  };
+
+  const handleResetQuiz = () => {
+    setSelectedAnswers({});
+    setShowQuizResults(false);
+    setQuizScore(0);
+  };
+
+  useEffect(() => {
+    handleResetQuiz();
+  }, [activeTopic]);
+
+  const getChecklistProgress = (topicId: string) => {
+    const topic = topics.find((t) => t.id === topicId);
+    if (!topic) return 0;
+    const items = topic.checklist;
+    const completed = items.filter((item) => checklistState[item.id]).length;
+    return Math.round((completed / items.length) * 100);
+  };
 
   return (
-    <Card className="p-6">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border pb-5">
-        <div>
-          <h2 className="text-xl font-bold tracking-wide text-primary flex items-center gap-2">
-            <BookOpen className="text-primary" /> Disaster Preparedness Learning Center
-          </h2>
-          <p className="text-sm text-foreground/60 mt-1">Get certified, live-saving tips and safety checklists for emergency events.</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            { id: "all", label: "All Content" },
-            { id: "flood", label: "Floods" },
-            { id: "earthquake", label: "Earthquakes" },
-            { id: "fire", label: "Fires" },
-            { id: "firstaid", label: "First Aid" }
-          ].map((tabInfo) => (
-            <button
-              key={tabInfo.id}
-              onClick={() => setActiveSubTab(tabInfo.id as any)}
-              className={`rounded-full px-3.5 py-1 text-xs font-semibold tracking-wide border transition-all ${
-                activeSubTab === tabInfo.id
-                  ? "bg-primary text-white border-primary shadow-[0_2px_8px_rgba(15,154,166,0.3)]"
-                  : "bg-background text-foreground/70 border-border hover:bg-muted"
-              }`}
-            >
-              {tabInfo.label}
-            </button>
-          ))}
+    <div className="grid gap-6 lg:grid-cols-[280px_1fr] items-start">
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground/50 uppercase tracking-wider px-1">Training Modules</h2>
+        <div className="space-y-2">
+          {topics.map((topic) => {
+            const isCertified = certifications[topic.id];
+            const progress = getChecklistProgress(topic.id);
+            return (
+              <button
+                key={topic.id}
+                onClick={() => { setActiveTopic(topic.id); setActiveSubTab("steps"); }}
+                className={`w-full text-left p-4 rounded-xl border transition-all ${
+                  activeTopic === topic.id
+                    ? "bg-primary text-white border-primary shadow-lg"
+                    : "bg-background text-foreground border-border hover:bg-muted/40 hover:shadow-sm"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                    activeTopic === topic.id ? "bg-white/20 text-white border-white/10" : topic.badgeColor
+                  }`}>
+                    {topic.category}
+                  </span>
+                  {isCertified && (
+                    <span className="text-[10px] font-semibold flex items-center gap-0.5 text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-full border border-teal-500/20">
+                      ★ Certified
+                    </span>
+                  )}
+                </div>
+                <h3 className="font-bold text-sm leading-tight">{topic.title}</h3>
+                <p className={`text-xs mt-1 leading-normal ${activeTopic === topic.id ? "text-white/80" : "text-foreground/60"}`}>
+                  {topic.description}
+                </p>
+                <div className="mt-3 space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span className={activeTopic === topic.id ? "text-white/70" : "text-foreground/50"}>Kit Progress</span>
+                    <span className="font-bold">{progress}%</span>
+                  </div>
+                  <div className={`h-1 w-full rounded-full ${activeTopic === topic.id ? "bg-white/25" : "bg-muted"}`}>
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${activeTopic === topic.id ? "bg-white" : "bg-primary"}`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {filteredTopics.map((topic) => (
-          <div key={topic.id} className="flex flex-col rounded-xl border border-border bg-background shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/20">
-            <div className="p-4 border-b border-border bg-muted/20">
-              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold border ${topic.color}`}>
-                {topic.category}
-              </span>
-              <h3 className="font-bold text-base mt-2 tracking-wide text-foreground">{topic.title}</h3>
-              <p className="text-xs text-foreground/60 mt-1">{topic.description}</p>
+      <Card className="p-6 flex flex-col min-h-[500px]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4 mb-6">
+          <div>
+            <h2 className="text-xl font-extrabold tracking-wide text-foreground flex items-center gap-2">
+              {currentTopic.title}
+              {certifications[currentTopic.id] && (
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-600 border border-teal-500/25">
+                  Certified Relief Responder
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-foreground/60 mt-1">Review the emergency instructions, pack your safety kit, and complete the certification quiz.</p>
+          </div>
+
+          <div className="flex bg-muted/60 p-1 rounded-lg border border-border">
+            {[
+              { id: "steps", label: "Action Steps" },
+              { id: "checklist", label: "Relief Kit" },
+              { id: "quiz", label: "Certify Quiz" }
+            ].map((st) => (
+              <button
+                key={st.id}
+                onClick={() => setActiveSubTab(st.id as any)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  activeSubTab === st.id
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-foreground/60 hover:text-foreground"
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeSubTab === "steps" && (
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-xl border border-border bg-background/50 p-4 shadow-sm">
+                <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500 font-bold text-xs mb-3 border border-blue-500/20">
+                  1
+                </div>
+                <h4 className="font-bold text-sm text-foreground mb-3 uppercase tracking-wider text-blue-500">Before (Prepare)</h4>
+                <ul className="space-y-2 text-xs text-foreground/80 leading-relaxed list-disc pl-4">
+                  {currentTopic.before.map((step, idx) => (
+                    <li key={idx}>{step}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 shadow-sm">
+                <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 font-bold text-xs mb-3 border border-amber-500/20">
+                  2
+                </div>
+                <h4 className="font-bold text-sm mb-3 uppercase tracking-wider text-amber-600 dark:text-amber-400">During (Immediate)</h4>
+                <ul className="space-y-2 text-xs text-foreground/80 leading-relaxed list-disc pl-4">
+                  {currentTopic.during.map((step, idx) => (
+                    <li key={idx}>{step}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4 shadow-sm">
+                <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-500/10 text-green-500 font-bold text-xs mb-3 border border-green-500/20">
+                  3
+                </div>
+                <h4 className="font-bold text-sm mb-3 uppercase tracking-wider text-green-600 dark:text-green-400">After (Recover)</h4>
+                <ul className="space-y-2 text-xs text-foreground/80 leading-relaxed list-disc pl-4">
+                  {currentTopic.after.map((step, idx) => (
+                    <li key={idx}>{step}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
-            <div className="p-5 flex-1 bg-card">
-              {topic.content}
+
+            <div className="flex gap-3 rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-xs">
+              <ShieldAlert className="text-red-500 shrink-0 stroke-[2.5]" size={20} />
+              <div className="space-y-1">
+                <p className="font-bold text-red-700 dark:text-red-400">Critical Coordination Directive</p>
+                <p className="text-foreground/80 leading-relaxed">
+                  In all active disaster environments, standard operations must prioritize local command requests. Maintain live communication links with your assigned NGO Coordinator, check network status regularly, and do not attempt search actions without safety equipment.
+                </p>
+              </div>
             </div>
           </div>
-        ))}
+        )}
+
+        {activeSubTab === "checklist" && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-muted/40 border border-border">
+              <h4 className="font-bold text-sm text-foreground mb-1">Emergency Kit & Packing List</h4>
+              <p className="text-xs text-foreground/60">Select items as you pack them. Responders carrying full kits receive higher task priority.</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {currentTopic.checklist.map((item) => (
+                <label
+                  key={item.id}
+                  className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer select-none transition-all ${
+                    checklistState[item.id]
+                      ? "bg-primary/5 border-primary/30"
+                      : "bg-background border-border hover:bg-muted/30"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!checklistState[item.id]}
+                    onChange={() => toggleChecklistItem(item.id)}
+                    className="mt-0.5 rounded border-border text-primary focus:ring-primary h-4 w-4 shrink-0"
+                  />
+                  <div className="space-y-0.5">
+                    <p className={`text-xs font-semibold ${checklistState[item.id] ? "text-primary line-through" : "text-foreground"}`}>
+                      {item.text}
+                    </p>
+                    <span className="text-[10px] text-foreground/50">Required Equipment</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeSubTab === "quiz" && (
+          <div className="space-y-5">
+            <div className="p-4 rounded-xl bg-muted/40 border border-border">
+              <h4 className="font-bold text-sm text-foreground mb-1">Knowledge Assessment Quiz</h4>
+              <p className="text-xs text-foreground/60">Pass this 2-question assessment to earn your Certified responder status badge for {currentTopic.category}.</p>
+            </div>
+
+            <div className="space-y-4">
+              {quizzes[activeTopic].map((q, qIdx) => {
+                const selected = selectedAnswers[qIdx];
+                return (
+                  <div key={qIdx} className="space-y-2">
+                    <h5 className="text-xs font-bold text-foreground">
+                      Q{qIdx + 1}: {q.question}
+                    </h5>
+                    <div className="grid gap-2">
+                      {q.options.map((option, oIdx) => {
+                        let btnStyle = "bg-background border-border hover:bg-muted/40 text-foreground/80";
+                        if (selected === oIdx) {
+                          btnStyle = "bg-primary text-white border-primary shadow-sm";
+                        }
+                        if (showQuizResults) {
+                          if (oIdx === q.answerIndex) {
+                            btnStyle = "bg-green-600 text-white border-green-600 shadow-sm";
+                          } else if (selected === oIdx && selected !== q.answerIndex) {
+                            btnStyle = "bg-red-600 text-white border-red-600 shadow-sm";
+                          } else {
+                            btnStyle = "bg-background border-border opacity-50 text-foreground/40";
+                          }
+                        }
+
+                        return (
+                          <button
+                            key={oIdx}
+                            type="button"
+                            onClick={() => handleSelectAnswer(qIdx, oIdx)}
+                            className={`w-full text-left px-4 py-3 rounded-xl border text-xs font-semibold transition-all ${btnStyle}`}
+                            disabled={showQuizResults}
+                          >
+                            {option}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {showQuizResults && (
+                      <p className="text-[11px] text-foreground/60 bg-muted/30 p-2.5 rounded-lg border border-border mt-1 leading-relaxed">
+                        <strong>Explanation:</strong> {q.explanation}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-border/60">
+              <div>
+                {showQuizResults && (
+                  <p className="text-xs font-bold">
+                    Score: <span className={quizScore === quizzes[activeTopic].length ? "text-green-600" : "text-red-600"}>
+                      {quizScore}/{quizzes[activeTopic].length}
+                    </span>
+                    {quizScore === quizzes[activeTopic].length ? " - Certified! ★" : " - Try again."}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {showQuizResults && (
+                  <Button onClick={handleResetQuiz} className="bg-foreground/10 text-foreground">
+                    Reset
+                  </Button>
+                )}
+                {!showQuizResults ? (
+                  <Button
+                    onClick={handleGradeQuiz}
+                    disabled={Object.keys(selectedAnswers).length < quizzes[activeTopic].length}
+                  >
+                    Grade Answers
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function AuditLogsPanel() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<ApiList<any>>("/api/audit-logs")
+      .then((res) => {
+        setLogs(res.data);
+      })
+      .catch((err) => console.error("Failed to load audit logs:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <Card className="p-6">Loading audit logs...</Card>;
+  }
+
+  return (
+    <Card className="p-6">
+      <div className="mb-4">
+        <h2 className="text-xl font-bold tracking-wide text-primary">System Audit Trail</h2>
+        <p className="text-sm text-foreground/60 mt-1">Immutable record of all state modifications and operations.</p>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full text-left text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wider text-foreground/75">
+              <th className="p-3">Time</th>
+              <th className="p-3">Action</th>
+              <th className="p-3">Actor (ID)</th>
+              <th className="p-3">Entity</th>
+              <th className="p-3">IP Address</th>
+              <th className="p-3 text-right">Details</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border bg-card">
+            {logs.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-foreground/50">No logs found.</td>
+              </tr>
+            ) : (
+              logs.map((log) => (
+                <>
+                  <tr key={log.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="p-3 text-xs text-foreground/60 whitespace-nowrap">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </td>
+                    <td className="p-3">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold border ${
+                        log.action.startsWith("CREATE") ? "bg-green-500/10 text-green-600 border-green-500/25" :
+                        log.action.startsWith("DELETE") ? "bg-red-500/10 text-red-600 border-red-500/25" :
+                        "bg-blue-500/10 text-blue-600 border-blue-500/25"
+                      }`}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="p-3 text-xs font-mono max-w-[150px] truncate" title={log.actorId}>
+                      {log.actorId || "System"}
+                    </td>
+                    <td className="p-3 text-xs whitespace-nowrap">
+                      {log.entity} <span className="text-foreground/40 font-mono">({log.entityId?.slice(-6) || "N/A"})</span>
+                    </td>
+                    <td className="p-3 text-xs font-mono whitespace-nowrap text-foreground/60">
+                      {log.ipAddress || "Unknown"}
+                    </td>
+                    <td className="p-3 text-right whitespace-nowrap">
+                      <Button
+                        onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                        className="py-1 px-2.5 text-xs h-7"
+                      >
+                        {expandedLogId === log.id ? "Hide" : "Show"}
+                      </Button>
+                    </td>
+                  </tr>
+                  {expandedLogId === log.id && (
+                    <tr className="bg-muted/20">
+                      <td colSpan={6} className="p-3 border-l-2 border-primary">
+                        <div className="text-xs space-y-1">
+                          <p className="font-semibold text-foreground/75">Metadata Payload:</p>
+                          <pre className="p-2.5 bg-background border border-border rounded-md font-mono overflow-auto max-h-40 leading-relaxed text-foreground/90">
+                            {JSON.stringify(log.metadata, null, 2)}
+                          </pre>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </Card>
   );

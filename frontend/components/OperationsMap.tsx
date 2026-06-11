@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, Marker, Popup, TileLayer, Polyline } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, Polyline, Circle } from "react-leaflet";
 import L from "leaflet";
 
 let userIcon: any;
@@ -59,6 +59,7 @@ export function OperationsMap({ disasters, shelters, requests }: { disasters: Po
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number; targetName: string } | null>(null);
   const [routeWarning, setRouteWarning] = useState<string | null>(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(true);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -144,6 +145,53 @@ export function OperationsMap({ disasters, shelters, requests }: { disasters: Po
           <Popup><strong>{currentLocation ? "Your current location" : "NIT Jalandhar, Punjab"}</strong></Popup>
         </Marker>
  
+        {/* Disaster Heatmap overlays (only for active/non-resolved disasters) */}
+        {showHeatmap && disasters
+          .filter((d) => d.status !== "RESOLVED")
+          .map((d) => {
+            const lat = d.latitude;
+            const lng = d.longitude;
+            const severity = d.severity || "MEDIUM";
+
+            let rings: { radius: number; color: string; fillOpacity: number }[] = [];
+            if (severity === "CRITICAL") {
+              rings = [
+                { radius: 1500, color: "#ef4444", fillOpacity: 0.35 },
+                { radius: 4000, color: "#ef4444", fillOpacity: 0.15 },
+                { radius: 8000, color: "#f97316", fillOpacity: 0.08 }
+              ];
+            } else if (severity === "HIGH") {
+              rings = [
+                { radius: 1000, color: "#f97316", fillOpacity: 0.35 },
+                { radius: 3000, color: "#f97316", fillOpacity: 0.15 },
+                { radius: 6000, color: "#eab308", fillOpacity: 0.06 }
+              ];
+            } else if (severity === "MEDIUM") {
+              rings = [
+                { radius: 800, color: "#eab308", fillOpacity: 0.3 },
+                { radius: 3000, color: "#eab308", fillOpacity: 0.1 }
+              ];
+            } else { // LOW
+              rings = [
+                { radius: 1000, color: "#3b82f6", fillOpacity: 0.2 }
+              ];
+            }
+
+            return rings.map((ring, idx) => (
+              <Circle
+                key={`d-heat-${d.id}-${idx}`}
+                center={[lat, lng]}
+                radius={ring.radius}
+                pathOptions={{
+                  color: ring.color,
+                  fillColor: ring.color,
+                  fillOpacity: ring.fillOpacity,
+                  stroke: false
+                }}
+              />
+            ));
+          })}
+
         {/* Disaster Markers */}
         {disasters.map((d) => (
           <Marker key={`d-${d.id}`} position={[d.latitude, d.longitude]} icon={disasterIcon}>
@@ -222,6 +270,43 @@ export function OperationsMap({ disasters, shelters, requests }: { disasters: Po
           </div>
         </div>
       )}
+
+      {/* Floating Map Layer & Legend Controls */}
+      <div className="absolute bottom-4 right-4 z-[1000] w-48 rounded-lg border border-border bg-background/95 p-3.5 shadow-xl backdrop-blur-md space-y-2 text-xs">
+        <div className="flex items-center justify-between border-b border-border pb-1.5 font-bold uppercase tracking-wider text-[10px] text-foreground/80">
+          <span>Map Controls</span>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer font-semibold text-foreground/80">
+          <input
+            type="checkbox"
+            checked={showHeatmap}
+            onChange={(e) => setShowHeatmap(e.target.checked)}
+            className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 accent-primary"
+          />
+          Show Heatmap
+        </label>
+        {showHeatmap && (
+          <div className="space-y-1 pt-1.5 border-t border-border/60 text-[11px]">
+            <span className="text-[9px] font-bold text-foreground/50 uppercase tracking-wider block mb-1">Impact Radius</span>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 opacity-80" />
+              <span>Critical (8km)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-orange-500 opacity-80" />
+              <span>High (6km)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-yellow-500 opacity-80" />
+              <span>Medium (3km)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-500 opacity-80" />
+              <span>Low (1km)</span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
