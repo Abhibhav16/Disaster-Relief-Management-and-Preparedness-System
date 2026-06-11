@@ -4,7 +4,7 @@ DRRCS is a full-stack, secure, role-based disaster response and relief coordinat
 
 ---
 
-## 🚀 Core Features
+##  Core Features
 
 ### 1. Interactive GIS Operations Map
 - **Visual Tracking**: Renders active disasters, emergency shelters, and requests on a live Leaflet map.
@@ -35,7 +35,7 @@ DRRCS is a full-stack, secure, role-based disaster response and relief coordinat
 
 ---
 
-## 🛠️ Technology Stack
+##  Technology Stack
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS, Lucide Icons
 - **Backend**: Node.js, Express, TypeScript, Zod Validation, Helmet (CORS/CORP)
@@ -46,7 +46,7 @@ DRRCS is a full-stack, secure, role-based disaster response and relief coordinat
 
 ---
 
-## 🏁 Quick Start
+##  Quick Start
 
 ### Prerequisites
 Make sure you have [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) installed on your machine.
@@ -75,7 +75,7 @@ This will automatically launch the database, apply Prisma migrations, seed sampl
 
 ---
 
-## 🔑 Default Seed Accounts
+##  Default Seed Accounts
 All default accounts use the password **`Password123!`**:
 
 | Role | Username / Email | Target Usage |
