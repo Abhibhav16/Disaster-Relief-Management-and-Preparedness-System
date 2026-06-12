@@ -67,10 +67,27 @@ const disasterSchema = z.object({
 
 coreRouter.get("/disasters", async (req, res) => {
   const { skip, take, page, pageSize } = pagination(req.query);
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  
+  const baseCondition: Prisma.DisasterWhereInput = {
+    OR: [
+      { status: { not: "RESOLVED" } },
+      {
+        status: "RESOLVED",
+        updatedAt: { gte: twoDaysAgo }
+      }
+    ]
+  };
+
   const where: Prisma.DisasterWhereInput = {
-    status: typeof req.query.status === "string" ? (req.query.status as any) : undefined,
-    severity: typeof req.query.severity === "string" ? (req.query.severity as any) : undefined,
-    title: typeof req.query.search === "string" ? { contains: req.query.search, mode: "insensitive" } : undefined
+    AND: [
+      baseCondition,
+      {
+        status: typeof req.query.status === "string" ? (req.query.status as any) : undefined,
+        severity: typeof req.query.severity === "string" ? (req.query.severity as any) : undefined,
+        title: typeof req.query.search === "string" ? { contains: req.query.search, mode: "insensitive" } : undefined
+      }
+    ]
   };
   const [data, total] = await Promise.all([prisma.disaster.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }), prisma.disaster.count({ where })]);
   res.json({ data, meta: { page, pageSize, total } });
@@ -305,7 +322,18 @@ coreRouter.post("/volunteers", validate(volunteerSchema), async (req, res) => {
   res.status(201).json(item);
 });
 coreRouter.get("/volunteers/:id", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"), async (req, res) => res.json(await prisma.volunteer.findUniqueOrThrow({ where: { id: paramId(req.params.id) }, include: { user: true, tasks: true } })));
-coreRouter.put("/volunteers/:id", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR"), validate(volunteerSchema), update("volunteer"));
+coreRouter.put("/volunteers/:id", authorize("ADMIN", "AUTHORITY", "NGO_COORDINATOR", "VOLUNTEER"), validate(volunteerSchema), async (req, res) => {
+  const volunteerId = paramId(req.params.id);
+  const existing = await prisma.volunteer.findUniqueOrThrow({ where: { id: volunteerId } });
+  
+  if (req.user!.role === "VOLUNTEER" && existing.userId !== req.user!.id) {
+    return res.status(403).json({ message: "Forbidden: Cannot update other volunteer profiles" });
+  }
+
+  const item = await prisma.volunteer.update({ where: { id: volunteerId }, data: req.body });
+  await logAudit(req.user!.id, "UPDATE_VOLUNTEER", "Volunteer", item.id, req.body, req.ip);
+  res.json(item);
+});
 coreRouter.delete("/volunteers/:id", authorize("ADMIN"), remove("volunteer"));
 
 const taskSchema = z.object({

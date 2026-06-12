@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Bell, BookOpen, Boxes, Cpu, Download, HandHeart, Home, LogOut, MessageSquare, Moon, Plus, Search, ShieldAlert, Sparkles, Sun, Users, X, Check, Send, Inbox, Mail } from "lucide-react";
+import { Activity, Bell, BookOpen, Boxes, Cpu, Download, HandHeart, Home, LogOut, MessageSquare, Moon, Plus, Search, ShieldAlert, Sparkles, Sun, Users, X, Check, Send, Inbox, Mail, MapPin, Calendar, Grid, TableProperties, Package, CheckCircle2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { io } from "socket.io-client";
 import { API_URL, ApiList, api } from "@/lib/api";
@@ -12,11 +12,11 @@ import { cn } from "@/lib/utils";
 const OperationsMap = dynamic(() => import("@/components/OperationsMap").then((m) => m.OperationsMap), { ssr: false });
 const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap").then((m) => m.LocationPickerMap), { ssr: false });
 
-type Disaster = { id: string; title: string; type: string; description: string; location: string; latitude: number; longitude: number; severity: string; status: string; imageUrl?: string };
+type Disaster = { id: string; title: string; type: string; description: string; location: string; latitude: number; longitude: number; severity: string; status: string; imageUrl?: string; startDate: string };
 type Shelter = { id: string; name: string; address: string; latitude: number; longitude: number; capacity: number; occupiedBeds: number; contactPerson?: string; phone?: string };
 type Request = { id: string; requestType: string; description: string; latitude: number; longitude: number; priority: string; status: string; imageUrl?: string; user?: { name: string; email: string } };
 type Resource = { id: string; name: string; category: string; quantity: number; location: string; status: string; latitude?: number; longitude?: number; provider?: string; expiryDate?: string };
-type Volunteer = { id: string; skills: string[]; availability: boolean; user?: { name: string; email: string } };
+type Volunteer = { id: string; skills: string[]; availability: boolean; phone?: string; location?: string; latitude?: number | null; longitude?: number | null; user?: { id?: string; name: string; email: string } };
 type CurrentUser = { id: string; name: string; email: string; role: { name: string } };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -117,6 +117,7 @@ export default function Dashboard() {
   const [isOnline, setIsOnline] = useState(true);
   const [lang, setLang] = useState<"en" | "hi" | "pa">("en");
   const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
+  const [newSkillText, setNewSkillText] = useState("");
 
   const t = (key: string) => translations[lang][key] || key;
 
@@ -235,6 +236,48 @@ export default function Dashboard() {
       syncOfflineQueue();
     }
   }, [isOnline, offlineQueue]);
+
+  async function updateVolunteerProfile(record: Volunteer, updatedSkills: string[], availability: boolean) {
+    try {
+      const updated = await api<Volunteer>(`/api/volunteers/${record.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          skills: updatedSkills,
+          phone: record.phone || "Not provided",
+          location: record.location || "Not provided",
+          latitude: record.latitude,
+          longitude: record.longitude,
+          availability: availability
+        })
+      });
+      setVolunteers((prev) => prev.map((v) => v.id === record.id ? { ...v, ...updated } : v));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update volunteer profile.");
+    }
+  }
+
+  function handleAddSkill(record: Volunteer) {
+    const trimmed = newSkillText.trim();
+    if (!trimmed) return;
+    if (record.skills.includes(trimmed)) {
+      setNewSkillText("");
+      return;
+    }
+    const updatedSkills = [...record.skills, trimmed];
+    setNewSkillText("");
+    updateVolunteerProfile(record, updatedSkills, record.availability);
+  }
+
+  function handleRemoveSkill(record: Volunteer, skillToRemove: string) {
+    const updatedSkills = record.skills.filter((s) => s !== skillToRemove);
+    updateVolunteerProfile(record, updatedSkills, record.availability);
+  }
+
+  function handleToggleAvailability(record: Volunteer, nextAvailable: boolean) {
+    if (record.availability === nextAvailable) return;
+    updateVolunteerProfile(record, record.skills, nextAvailable);
+  }
 
   useEffect(() => {
     const socket = io(API_URL);
@@ -716,8 +759,103 @@ export default function Dashboard() {
                   </div>
                 </Card>
               )}
+
+              {user?.role.name === "VOLUNTEER" && (() => {
+                const myRecord = volunteers.find((v) => v.user?.id === user.id || (v as any).userId === user.id);
+                if (!myRecord) return null;
+                
+                return (
+                  <Card className="border-primary/25 bg-muted/20 p-5 shadow-sm space-y-4">
+                    <div>
+                      <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <HandHeart size={18} className="text-primary" /> Update Your Volunteer Profile
+                      </h3>
+                      <p className="text-xs text-foreground/60 mt-0.5">Manage your skill set and real-time availability for dispatchers.</p>
+                    </div>
+                    
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-foreground/75 block">Skills & Expertise</label>
+                        <div className="flex flex-wrap gap-1.5 p-2.5 rounded-lg border border-border bg-background min-h-12 items-center">
+                          {myRecord.skills.length === 0 ? (
+                            <span className="text-xs text-foreground/45 italic leading-6">No skills added yet. Add skills below.</span>
+                          ) : (
+                            myRecord.skills.map((skill: string) => (
+                              <Badge key={skill} className="bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-1 py-1 px-2.5 text-xs rounded-full border border-primary/20">
+                                {skill}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSkill(myRecord, skill)}
+                                  className="text-primary hover:text-red-500 font-bold ml-1 text-sm focus:outline-none"
+                                  title="Remove skill"
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            value={newSkillText}
+                            onChange={(e) => setNewSkillText(e.target.value)}
+                            placeholder="e.g. First Aid, Translation, Driving..."
+                            className="text-xs h-9"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddSkill(myRecord);
+                              }
+                            }}
+                          />
+                          <Button onClick={() => handleAddSkill(myRecord)} className="h-9 px-4 text-xs whitespace-nowrap">
+                            Add Skill
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 flex flex-col justify-between">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-foreground/75 block">Availability Status</label>
+                          <div className="flex items-center gap-3 mt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAvailability(myRecord, true)}
+                              className={cn(
+                                "flex-1 py-2 px-3 text-xs font-semibold rounded-lg border transition-all text-center focus:outline-none",
+                                myRecord.availability
+                                  ? "bg-green-500/10 text-green-600 border-green-500/25 shadow-sm font-bold"
+                                  : "bg-background text-foreground/60 border-border hover:bg-muted"
+                              )}
+                            >
+                              Available for Dispatch
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAvailability(myRecord, false)}
+                              className={cn(
+                                "flex-1 py-2 px-3 text-xs font-semibold rounded-lg border transition-all text-center focus:outline-none",
+                                !myRecord.availability
+                                  ? "bg-red-500/10 text-red-600 border-red-500/25 shadow-sm font-bold"
+                                  : "bg-background text-foreground/60 border-border hover:bg-muted"
+                              )}
+                            >
+                              Busy / Unavailable
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 text-right">
+                          <p className="text-[10px] text-foreground/50 italic">Changes are saved automatically when adding/removing skills or toggling availability.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })()}
+
               <Table 
-                title="Volunteers" 
+                title="Volunteers List" 
                 rows={filteredVolunteers.map((v) => ({ 
                   name: v.user?.name ?? "Volunteer", 
                   skills: v.skills.join(", "), 
@@ -838,6 +976,7 @@ function ResourcePanel({ resources, user, onCreated }: { resources: Resource[]; 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  const [viewMode, setViewMode] = useState<"card" | "table">("card");
 
   const canAdd = user && ["ADMIN", "AUTHORITY", "NGO_COORDINATOR", "VOLUNTEER"].includes(user.role.name);
 
@@ -1053,13 +1192,114 @@ function ResourcePanel({ resources, user, onCreated }: { resources: Resource[]; 
         </Card>
       )}
 
-      <Table
-        title="Resources"
-        rows={resources}
-        columns={["name", "category", "quantity", "status", "location"]}
-        onAdd={canAdd ? () => setShowAddForm(true) : undefined}
-        onRowClick={(row) => setSelectedResource(row)}
-      />
+      <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+        <h2 className="text-lg font-bold text-foreground">Resource Inventory</h2>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-border bg-muted/20 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("card")}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold flex items-center gap-1 focus:outline-none transition-all",
+                viewMode === "card" ? "bg-background shadow text-primary font-bold" : "text-foreground/60 hover:text-foreground"
+              )}
+            >
+              <Grid size={14} /> Card View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold flex items-center gap-1 focus:outline-none transition-all",
+                viewMode === "table" ? "bg-background shadow text-primary font-bold" : "text-foreground/60 hover:text-foreground"
+              )}
+            >
+              <TableProperties size={14} /> Table View
+            </button>
+          </div>
+          {canAdd && !showAddForm && (
+            <Button className="gap-1.5 text-xs py-1.5 h-8" onClick={() => setShowAddForm(true)}>
+              <Plus size={14} /> Add Resource
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {viewMode === "table" ? (
+        <Table
+          title="Resources"
+          rows={resources}
+          columns={["name", "category", "quantity", "status", "location"]}
+          onAdd={undefined}
+          onRowClick={(row) => setSelectedResource(row)}
+        />
+      ) : (
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {resources.length === 0 ? (
+            <div className="col-span-full text-center py-10 border rounded-lg bg-card text-foreground/50 text-sm">No resources in inventory.</div>
+          ) : (
+            resources.map((r) => {
+              const statusColor = 
+                r.status === "AVAILABLE" ? "border-l-4 border-l-green-500" :
+                r.status === "LOW_STOCK" ? "border-l-4 border-l-orange-500" :
+                "border-l-4 border-l-red-500";
+              
+              const statusBadge = 
+                r.status === "AVAILABLE" ? "bg-green-500/10 text-green-600 border-green-500/25" :
+                r.status === "LOW_STOCK" ? "bg-orange-500/10 text-orange-600 border-orange-500/25 font-bold" :
+                "bg-red-500/10 text-red-600 border-red-500/25 font-bold";
+
+              const cat = r.category.toUpperCase();
+              const catColor = 
+                cat.includes("WATER") ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
+                cat.includes("FOOD") ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                cat.includes("MED") ? "bg-rose-500/10 text-rose-600 border-rose-500/20" :
+                cat.includes("SHELTER") || cat.includes("BLANKET") ? "bg-amber-500/10 text-amber-600 border-amber-500/20" :
+                "bg-slate-500/10 text-slate-600 border-slate-500/20";
+
+              return (
+                <Card 
+                  key={r.id} 
+                  className={cn("hover:shadow-lg hover:-translate-y-1 hover:border-primary/20 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden p-5 bg-card", statusColor)}
+                  onClick={() => setSelectedResource(r)}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="font-bold text-base leading-snug text-foreground line-clamp-1">{r.name}</h3>
+                      <Badge className={cn("px-2 py-0.5 text-[10px] border rounded-full uppercase tracking-wider shrink-0", statusBadge)}>
+                        {r.status.replace("_", " ").toLowerCase()}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-foreground/40 uppercase tracking-wider font-semibold">Category:</span>
+                      <Badge className={cn("px-2.5 py-0.5 text-[10px] rounded-full border", catColor)}>
+                        {r.category.toLowerCase().replace(/_/g, " ")}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-baseline gap-1 pt-1">
+                      <span className="text-2xl font-black text-foreground">{r.quantity}</span>
+                      <span className="text-xs text-foreground/50 font-bold">Units</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-border/40 mt-4 flex flex-col gap-1 text-[11px] text-foreground/50 bg-muted/10">
+                    <span className="flex items-center gap-1.5 pt-1">
+                      <MapPin size={12} className="stroke-[2.5]" /> {r.location}
+                    </span>
+                    {r.provider && (
+                      <span className="flex items-center gap-1.5 text-foreground/60 font-medium">
+                        <Package size={12} className="stroke-[2.5]" /> {r.provider}
+                      </span>
+                    )}
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {selectedResource && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -1139,6 +1379,7 @@ function ShelterPanel({ shelters, user, onCreated }: { shelters: Shelter[]; user
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedShelter, setSelectedShelter] = useState<Shelter | null>(null);
+  const [viewMode, setViewMode] = useState<"card" | "table">("card");
 
   const canAdd = user && ["ADMIN", "AUTHORITY", "NGO_COORDINATOR"].includes(user.role.name);
 
@@ -1337,13 +1578,115 @@ function ShelterPanel({ shelters, user, onCreated }: { shelters: Shelter[]; user
         </Card>
       )}
 
-      <Table
-        title="Shelters"
-        rows={shelters}
-        columns={["name", "capacity", "occupiedBeds", "address"]}
-        onAdd={canAdd ? () => setShowAddForm(true) : undefined}
-        onRowClick={(row) => setSelectedShelter(row)}
-      />
+      <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+        <h2 className="text-lg font-bold text-foreground">Relief Shelters</h2>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-border bg-muted/20 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("card")}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold flex items-center gap-1 focus:outline-none transition-all",
+                viewMode === "card" ? "bg-background shadow text-primary font-bold" : "text-foreground/60 hover:text-foreground"
+              )}
+            >
+              <Grid size={14} /> Card View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold flex items-center gap-1 focus:outline-none transition-all",
+                viewMode === "table" ? "bg-background shadow text-primary font-bold" : "text-foreground/60 hover:text-foreground"
+              )}
+            >
+              <TableProperties size={14} /> Table View
+            </button>
+          </div>
+          {canAdd && !showAddForm && (
+            <Button className="gap-1.5 text-xs py-1.5 h-8" onClick={() => setShowAddForm(true)}>
+              <Plus size={14} /> Add Shelter
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {viewMode === "table" ? (
+        <Table
+          title="Shelters"
+          rows={shelters}
+          columns={["name", "capacity", "occupiedBeds", "address"]}
+          onAdd={undefined}
+          onRowClick={(row) => setSelectedShelter(row)}
+        />
+      ) : (
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {shelters.length === 0 ? (
+            <div className="col-span-full text-center py-10 border rounded-lg bg-card text-foreground/50 text-sm">No shelter locations registered.</div>
+          ) : (
+            shelters.map((s) => {
+              const ratio = s.capacity > 0 ? (s.occupiedBeds / s.capacity) : 0;
+              const percent = Math.round(ratio * 100);
+              
+              const occupancyColor = 
+                ratio >= 0.9 ? "border-l-4 border-l-red-500" :
+                ratio >= 0.7 ? "border-l-4 border-l-orange-500" :
+                "border-l-4 border-l-emerald-500";
+              
+              const occupancyBadge = 
+                ratio >= 0.9 ? "bg-red-500/10 text-red-600 border-red-500/25 font-bold" :
+                ratio >= 0.7 ? "bg-orange-500/10 text-orange-600 border-orange-500/25 font-bold" :
+                "bg-emerald-500/10 text-emerald-600 border-emerald-500/25 font-bold";
+
+              const progressBarColor = 
+                ratio >= 0.9 ? "bg-red-500" :
+                ratio >= 0.7 ? "bg-orange-500" :
+                "bg-emerald-500";
+
+              return (
+                <Card 
+                  key={s.id} 
+                  className={cn("hover:shadow-lg hover:-translate-y-1 hover:border-primary/20 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden p-5 bg-card", occupancyColor)}
+                  onClick={() => setSelectedShelter(s)}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="font-bold text-base leading-snug text-foreground line-clamp-1">{s.name}</h3>
+                      <Badge className={cn("px-2 py-0.5 text-[10px] border rounded-full uppercase tracking-wider shrink-0", occupancyBadge)}>
+                        {percent}% Full
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-semibold text-foreground/75">
+                        <span>Beds Occupancy</span>
+                        <span>{s.occupiedBeds} / {s.capacity} beds</span>
+                      </div>
+                      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className={cn("h-full rounded-full transition-all duration-500", progressBarColor)} 
+                          style={{ width: `${Math.min(100, percent)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-border/40 mt-4 flex flex-col gap-1 text-[11px] text-foreground/50 bg-muted/10">
+                    <span className="flex items-center gap-1.5 pt-1">
+                      <MapPin size={12} className="stroke-[2.5]" /> {s.address}
+                    </span>
+                    {s.contactPerson && (
+                      <span className="flex items-center gap-1.5 text-foreground/60 font-medium">
+                        <Users size={12} className="stroke-[2.5]" /> {s.contactPerson} {s.phone ? `(${s.phone})` : ""}
+                      </span>
+                    )}
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {selectedShelter && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -1442,6 +1785,7 @@ function DisasterPanel({ disasters, user, onCreated, onUpdate }: { disasters: Di
   const [message, setMessage] = useState("");
   const [selectedDisaster, setSelectedDisaster] = useState<Disaster | null>(null);
   const [settlingId, setSettlingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"card" | "table">("card");
 
   const canAdd = user && ["ADMIN", "AUTHORITY", "NGO_COORDINATOR"].includes(user.role.name);
   const canSettle = user && ["ADMIN", "NGO_COORDINATOR"].includes(user.role.name);
@@ -1506,7 +1850,8 @@ function DisasterPanel({ disasters, user, onCreated, onUpdate }: { disasters: Di
           longitude: Number(longitude),
           severity,
           status,
-          imageUrl: photo || undefined
+          imageUrl: photo || undefined,
+          startDate: new Date(startDate).toISOString()
         });
         (window as any).queueOfflineAction("/api/disasters", {
           method: "POST",
@@ -1716,13 +2061,112 @@ function DisasterPanel({ disasters, user, onCreated, onUpdate }: { disasters: Di
         </Card>
       )}
 
-      <Table
-        title="Disaster Management"
-        rows={disasters}
-        columns={["title", "type", "severity", "status", "location", "imageUrl"]}
-        onAdd={canAdd ? () => setShowAddForm(true) : undefined}
-        onRowClick={(row) => setSelectedDisaster(row)}
-      />
+      <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+        <h2 className="text-lg font-bold text-foreground">Disaster Events</h2>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-border bg-muted/20 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("card")}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold flex items-center gap-1 focus:outline-none transition-all",
+                viewMode === "card" ? "bg-background shadow text-primary font-bold" : "text-foreground/60 hover:text-foreground"
+              )}
+            >
+              <Grid size={14} /> Card View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold flex items-center gap-1 focus:outline-none transition-all",
+                viewMode === "table" ? "bg-background shadow text-primary font-bold" : "text-foreground/60 hover:text-foreground"
+              )}
+            >
+              <TableProperties size={14} /> Table View
+            </button>
+          </div>
+          {canAdd && !showAddForm && (
+            <Button className="gap-1.5 text-xs py-1.5 h-8" onClick={() => setShowAddForm(true)}>
+              <Plus size={14} /> Report Event
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {viewMode === "table" ? (
+        <Table
+          title="Disasters"
+          rows={disasters}
+          columns={["title", "type", "severity", "status", "location", "imageUrl"]}
+          onAdd={undefined}
+          onRowClick={(row) => setSelectedDisaster(row)}
+        />
+      ) : (
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {disasters.length === 0 ? (
+            <div className="col-span-full text-center py-10 border rounded-lg bg-card text-foreground/50 text-sm">No disaster events reported.</div>
+          ) : (
+            disasters.map((d) => {
+              const severityColor = 
+                d.severity === "CRITICAL" ? "border-l-4 border-l-red-500" :
+                d.severity === "HIGH" ? "border-l-4 border-l-orange-500" :
+                d.severity === "MEDIUM" ? "border-l-4 border-l-yellow-500" :
+                "border-l-4 border-l-blue-500";
+              
+              const severityBadge = 
+                d.severity === "CRITICAL" ? "bg-red-500/10 text-red-600 border-red-500/25 font-bold" :
+                d.severity === "HIGH" ? "bg-orange-500/10 text-orange-600 border-orange-500/25 font-bold" :
+                d.severity === "MEDIUM" ? "bg-yellow-500/10 text-yellow-600 border-yellow-500/25 font-bold" :
+                "bg-blue-500/10 text-blue-600 border-blue-500/25 font-bold";
+
+              return (
+                <Card 
+                  key={d.id} 
+                  className={cn("hover:shadow-lg hover:-translate-y-1 hover:border-primary/20 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden p-0 bg-card", severityColor)}
+                  onClick={() => setSelectedDisaster(d)}
+                >
+                  <div>
+                    {d.imageUrl ? (
+                      <div className="h-32 w-full overflow-hidden border-b border-border">
+                        <img src={`${API_URL}${d.imageUrl}`} alt={d.title} className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="h-32 w-full bg-gradient-to-br from-primary/10 to-primary/5 border-b border-border flex items-center justify-center text-primary/40 relative">
+                        <ShieldAlert size={40} className="stroke-[1.5]" />
+                        <span className="absolute bottom-2 right-2 text-[10px] uppercase tracking-wider font-semibold opacity-60">No Banner</span>
+                      </div>
+                    )}
+
+                    <div className="p-4 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <Badge className={cn("px-2.5 py-0.5 text-[10px] border rounded-full uppercase tracking-wider", severityBadge)}>
+                          {d.severity}
+                        </Badge>
+                        <Badge className="px-2.5 py-0.5 text-[10px] border rounded-full uppercase tracking-wider bg-background border-border text-foreground/75">
+                          {d.status.replace("_", " ").toLowerCase()}
+                        </Badge>
+                      </div>
+
+                      <h3 className="font-bold text-base leading-tight text-foreground line-clamp-1">{d.title}</h3>
+                      <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed">{d.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 pt-0 border-t border-border/40 mt-auto flex flex-col gap-1 text-[11px] text-foreground/50 bg-muted/10">
+                    <span className="flex items-center gap-1.5 pt-2">
+                      <MapPin size={12} className="stroke-[2.5]" /> {d.location}
+                    </span>
+                    <span className="flex items-center gap-1.5 pb-1">
+                      <Calendar size={12} className="stroke-[2.5]" /> {new Date(d.startDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {selectedDisaster && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">

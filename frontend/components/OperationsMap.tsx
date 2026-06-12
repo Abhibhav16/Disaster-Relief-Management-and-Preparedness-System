@@ -156,24 +156,24 @@ export function OperationsMap({ disasters, shelters, requests }: { disasters: Po
             let rings: { radius: number; color: string; fillOpacity: number }[] = [];
             if (severity === "CRITICAL") {
               rings = [
-                { radius: 1500, color: "#ef4444", fillOpacity: 0.35 },
-                { radius: 4000, color: "#ef4444", fillOpacity: 0.15 },
-                { radius: 8000, color: "#f97316", fillOpacity: 0.08 }
+                { radius: 1500, color: "#ef4444", fillOpacity: 0.65 },
+                { radius: 4000, color: "#ef4444", fillOpacity: 0.40 },
+                { radius: 8000, color: "#f97316", fillOpacity: 0.20 }
               ];
             } else if (severity === "HIGH") {
               rings = [
-                { radius: 1000, color: "#f97316", fillOpacity: 0.35 },
-                { radius: 3000, color: "#f97316", fillOpacity: 0.15 },
-                { radius: 6000, color: "#eab308", fillOpacity: 0.06 }
+                { radius: 1000, color: "#f97316", fillOpacity: 0.60 },
+                { radius: 3000, color: "#f97316", fillOpacity: 0.35 },
+                { radius: 6000, color: "#eab308", fillOpacity: 0.15 }
               ];
             } else if (severity === "MEDIUM") {
               rings = [
-                { radius: 800, color: "#eab308", fillOpacity: 0.3 },
-                { radius: 3000, color: "#eab308", fillOpacity: 0.1 }
+                { radius: 800, color: "#eab308", fillOpacity: 0.55 },
+                { radius: 3000, color: "#eab308", fillOpacity: 0.22 }
               ];
             } else { // LOW
               rings = [
-                { radius: 1000, color: "#3b82f6", fillOpacity: 0.2 }
+                { radius: 1000, color: "#3b82f6", fillOpacity: 0.45 }
               ];
             }
 
